@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Three.js Ghibli Museum</title>
+    <title>Three.js Ghibli FPS Museum</title>
     <style>
         body { margin: 0; overflow: hidden; }
         canvas { display: block; }
@@ -13,21 +13,21 @@
     <script type="module">
         import * as THREE from "https://cdn.jsdelivr.net/npm/three@latest/build/three.module.min.js";
 
-        // 1️⃣ Scene Setup
+        // 1️⃣ Scene & Fog
         const scene = new THREE.Scene();
-        scene.fog = new THREE.Fog(0x88ccee, 5, 30); // Soft fog for dreamy effect
+        scene.fog = new THREE.Fog(0x88ccee, 5, 50); // Soft Ghibli-like fog
 
-        // 2️⃣ Camera Setup
+        // 2️⃣ Camera (First-Person Perspective)
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 1.6, 5); // Player starts at eye level
+        camera.position.set(0, 1.6, 0); // Eye level
 
         // 3️⃣ Renderer Setup
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
-        renderer.setClearColor(0x88ccee); // Ghibli-style blue sky
+        renderer.setClearColor(0x88ccee); // Ghibli sky color
 
-        // 4️⃣ Lighting (Soft Sunlight)
+        // 4️⃣ Lighting (Soft Ghibli-style Sunlight)
         const ambientLight = new THREE.AmbientLight(0xffe0bd, 0.8);
         scene.add(ambientLight);
         const sunLight = new THREE.DirectionalLight(0xffddaa, 1);
@@ -36,13 +36,10 @@
 
         // 5️⃣ Load Textures
         const textureLoader = new THREE.TextureLoader();
-        const grassTexture = textureLoader.load("https://i.imgur.com/1Nmc0Pt.jpg"); // Ghibli-style grass
-        const wallTexture1 = textureLoader.load("https://i.imgur.com/w1y3qXb.jpg"); // Ghibli wall 1
-        const wallTexture2 = textureLoader.load("https://i.imgur.com/BtKm0IZ.jpg"); // Ghibli wall 2
-        const wallTexture3 = textureLoader.load("https://i.imgur.com/XbqYQJm.jpg"); // Ghibli wall 3
-        const wallTexture4 = textureLoader.load("https://i.imgur.com/NZPzPhR.jpg"); // Ghibli wall 4
+        const grassTexture = textureLoader.load("https://i.imgur.com/1Nmc0Pt.jpg");
+        const wallTexture = textureLoader.load("https://i.imgur.com/w1y3qXb.jpg");
 
-        // 6️⃣ Create Ground
+        // 6️⃣ Ground (Large Area)
         grassTexture.wrapS = grassTexture.wrapT = THREE.RepeatWrapping;
         grassTexture.repeat.set(10, 10);
         const groundMaterial = new THREE.MeshStandardMaterial({ map: grassTexture });
@@ -50,65 +47,37 @@
         ground.rotation.x = -Math.PI / 2;
         scene.add(ground);
 
-        // 7️⃣ Create Walls
-        function createWall(x, z, texture) {
-            const wallGeometry = new THREE.BoxGeometry(10, 3, 0.2);
+        // 7️⃣ Walls (Including Boundaries)
+        function createWall(x, z, width, height, depth, texture) {
+            const wallGeometry = new THREE.BoxGeometry(width, height, depth);
             const wallMaterial = new THREE.MeshStandardMaterial({ map: texture });
             const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-            wall.position.set(x, 1.5, z);
+            wall.position.set(x, height / 2, z);
             scene.add(wall);
+            return wall; // Return the wall object for collision detection
         }
 
-        createWall(0, -10, wallTexture1); // Front Wall
-        createWall(10, 0, wallTexture2); // Right Wall
-        createWall(-10, 0, wallTexture3); // Left Wall
-        createWall(0, 10, wallTexture4); // Back Wall
+        // Museum Walls (Interior)
+        const walls = [
+            createWall(0, -10, 10, 3, 0.2, wallTexture), // Front Wall
+            createWall(10, 0, 0.2, 3, 10, wallTexture), // Right Wall
+            createWall(-10, 0, 0.2, 3, 10, wallTexture), // Left Wall
+            createWall(0, 10, 10, 3, 0.2, wallTexture), // Back Wall
+        ];
 
-        // 8️⃣ Create Boundaries (Invisible Walls)
-        const boundaries = [];
-        function createBoundary(x, z) {
-            const boundaryGeometry = new THREE.BoxGeometry(10, 3, 0.2);
-            const boundaryMaterial = new THREE.MeshStandardMaterial({ visible: false });
-            const boundary = new THREE.Mesh(boundaryGeometry, boundaryMaterial);
-            boundary.position.set(x, 1.5, z);
-            scene.add(boundary);
-            boundaries.push(boundary);
-        }
+        // Outer Boundaries (Prevent Leaving the Area)
+        const boundaries = [
+            createWall(0, -25, 50, 5, 1, wallTexture), // Top Boundary
+            createWall(25, 0, 1, 5, 50, wallTexture), // Right Boundary
+            createWall(-25, 0, 1, 5, 50, wallTexture), // Left Boundary
+            createWall(0, 25, 50, 5, 1, wallTexture), // Bottom Boundary
+        ];
 
-        createBoundary(0, -10); // Front Boundary
-        createBoundary(10, 0); // Right Boundary
-        createBoundary(-10, 0); // Left Boundary
-        createBoundary(0, 10); // Back Boundary
-
-        // 9️⃣ Player Movement (WASD)
-        const keys = { w: false, s: false, a: false, d: false };
-
-        document.addEventListener("keydown", (event) => { keys[event.key.toLowerCase()] = true; });
-        document.addEventListener("keyup", (event) => { keys[event.key.toLowerCase()] = false; });
-
-        function updatePlayer() {
-            const speed = 0.1;
-            const direction = new THREE.Vector3();
-            camera.getWorldDirection(direction);
-
-            let newPosition = camera.position.clone();
-            if (keys.w) newPosition.addScaledVector(direction, speed);
-            if (keys.s) newPosition.addScaledVector(direction, -speed);
-            if (keys.a) newPosition.x -= speed;
-            if (keys.d) newPosition.x += speed;
-
-            // Prevent walking through boundaries
-            let canMove = true;
-            boundaries.forEach(boundary => {
-                const distance = boundary.position.distanceTo(newPosition);
-                if (distance < 2) canMove = false; // If too close, stop movement
-            });
-
-            if (canMove) camera.position.copy(newPosition);
-        }
-
-        // 🔟 Mouse-Look (FPS Style)
+        // 8️⃣ FPS Camera Controls (Mouse-Look + WASD Movement)
         let isLocked = false;
+        let moveSpeed = 0.1;
+        let velocity = new THREE.Vector3();
+
         document.body.addEventListener("click", () => {
             document.body.requestPointerLock();
         });
@@ -122,11 +91,42 @@
                 const sensitivity = 0.002;
                 camera.rotation.y -= event.movementX * sensitivity;
                 camera.rotation.x -= event.movementY * sensitivity;
-                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x)); // Prevent looking too far up/down
             }
         });
 
-        // 1️⃣1️⃣ Animation Loop
+        const keys = { w: false, s: false, a: false, d: false };
+
+        document.addEventListener("keydown", (event) => keys[event.key.toLowerCase()] = true);
+        document.addEventListener("keyup", (event) => keys[event.key.toLowerCase()] = false);
+
+        function updatePlayer() {
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            direction.y = 0; // Ignore up/down movement
+
+            velocity.set(0, 0, 0);
+            if (keys.w) velocity.addScaledVector(direction, moveSpeed);
+            if (keys.s) velocity.addScaledVector(direction, -moveSpeed);
+
+            // Strafe Left/Right
+            const strafe = new THREE.Vector3();
+            strafe.crossVectors(camera.up, direction).normalize();
+            if (keys.a) velocity.addScaledVector(strafe, moveSpeed);
+            if (keys.d) velocity.addScaledVector(strafe, -moveSpeed);
+
+            // Check Collision with Walls
+            let nextPosition = camera.position.clone().add(velocity);
+            let canMove = true;
+            
+            [...walls, ...boundaries].forEach(wall => {
+                if (wall.position.distanceTo(nextPosition) < 3) canMove = false;
+            });
+
+            if (canMove) camera.position.add(velocity);
+        }
+
+        // 🔟 Animation Loop
         function animate() {
             requestAnimationFrame(animate);
             updatePlayer();
@@ -134,7 +134,7 @@
         }
         animate();
 
-        // 1️⃣2️⃣ Handle Window Resize
+        // 1️⃣1️⃣ Handle Window Resize
         window.addEventListener("resize", () => {
             renderer.setSize(window.innerWidth, window.innerHeight);
             camera.aspect = window.innerWidth / window.innerHeight;
@@ -144,3 +144,6 @@
     </script>
 </body>
 </html>
+
+
+

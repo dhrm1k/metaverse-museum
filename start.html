@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Museum with Paintings</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="module">
+        import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
+
+        // Scene, Camera, Renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lights
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(5, 10, 5);
+        scene.add(light);
+
+        // Semi-transparent Walls
+        const roomMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xaaaaaa, 
+            side: THREE.BackSide, 
+            transparent: true, 
+            opacity: 0.5  
+        });
+
+        // Museum Room
+        const roomGeometry = new THREE.BoxGeometry(20, 10, 30);
+        const room = new THREE.Mesh(roomGeometry, roomMaterial);
+        scene.add(room);
+
+        // Floor (Green for Visibility)
+        const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 }); 
+        const floorGeometry = new THREE.PlaneGeometry(20, 30);
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        // Grid Helper (Debugging)
+        const gridHelper = new THREE.GridHelper(30, 30);
+        scene.add(gridHelper);
+
+        // Function to Add Paintings on Walls
+        function createPainting(imageURL, x, y, z, rotationY) {
+            const textureLoader = new THREE.TextureLoader();
+            const texture = textureLoader.load(imageURL);
+
+            const paintingMaterial = new THREE.MeshBasicMaterial({ map: texture });
+            const paintingGeometry = new THREE.PlaneGeometry(4, 3); // Painting size
+            const painting = new THREE.Mesh(paintingGeometry, paintingMaterial);
+
+            painting.position.set(x, y, z);
+            painting.rotation.y = rotationY; // Adjust facing direction
+            scene.add(painting);
+        }
+
+        // Add Some Paintings
+        createPainting("https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Starry_Night_Over_the_Rhone.jpg/640px-Starry_Night_Over_the_Rhone.jpg", -6, 3, -14, 0);
+        createPainting("https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/640px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg", 6, 3, -14, 0);
+        createPainting("https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/The_Great_Wave_off_Kanagawa.jpg/640px-The_Great_Wave_off_Kanagawa.jpg", 0, 3, -14, 0);
+
+        // FPS Controls (WASD + Mouse Look)
+        let moveSpeed = 0.1;
+        let keys = {};
+        let pitch = 0, yaw = 0;
+        let sensitivity = 0.002;
+        let isLocked = false;
+
+        window.addEventListener("keydown", (event) => keys[event.key.toLowerCase()] = true);
+        window.addEventListener("keyup", (event) => keys[event.key.toLowerCase()] = false);
+
+        document.body.addEventListener("click", () => {
+            document.body.requestPointerLock();
+        });
+
+        document.addEventListener("pointerlockchange", () => {
+            isLocked = document.pointerLockElement === document.body;
+        });
+
+        document.addEventListener("mousemove", (event) => {
+            if (isLocked) {
+                yaw -= event.movementX * sensitivity;
+                pitch -= event.movementY * sensitivity;
+                pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+            }
+        });
+
+        // Game Loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Apply rotation
+            camera.rotation.x = pitch;
+            camera.rotation.y = yaw;
+
+            // Movement
+            let forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+            let right = new THREE.Vector3(-forward.z, 0, forward.x);
+            let movement = new THREE.Vector3();
+
+            if (keys["w"]) movement.add(forward);
+            if (keys["s"]) movement.sub(forward);
+            if (keys["a"]) movement.sub(right);
+            if (keys["d"]) movement.add(right);
+
+            movement.normalize().multiplyScalar(moveSpeed);
+            camera.position.add(movement);
+
+            renderer.render(scene, camera);
+        }
+
+        // Set Camera to a Better Position
+        camera.position.set(0, 3, 10);
+        animate();
+    </script>
+</body>
+</html>

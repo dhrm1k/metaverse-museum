@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Museum Explorer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 7.5);
+        scene.add(directionalLight);
+
+        // Floor
+        const floorGeometry = new THREE.PlaneGeometry(20, 20);
+        const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        // Walls
+        const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xaaaaaa });
+        function createWall(width, height, depth, x, y, z) {
+            const wallGeometry = new THREE.BoxGeometry(width, height, depth);
+            const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+            wall.position.set(x, y, z);
+            scene.add(wall);
+        }
+        createWall(20, 5, 0.5, 0, 2.5, -10); // Back Wall
+        createWall(20, 5, 0.5, 0, 2.5, 10);  // Front Wall
+        createWall(0.5, 5, 20, -10, 2.5, 0); // Left Wall
+        createWall(0.5, 5, 20, 10, 2.5, 0);  // Right Wall
+
+        // Camera position
+        camera.position.set(0, 1.5, 5);
+
+        // Movement controls
+        const speed = 0.2;
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowUp') camera.position.z -= speed;
+            if (event.key === 'ArrowDown') camera.position.z += speed;
+            if (event.key === 'ArrowLeft') camera.position.x -= speed;
+            if (event.key === 'ArrowRight') camera.position.x += speed;
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>

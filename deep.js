@@ -297,3 +297,91 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+// ========== BOUNDARY CONSTRAINTS ==========
+function checkBoundaries() {
+    // Museum boundaries
+    const halfWidth = museumWidth / 2 - 1; // Buffer to prevent clipping
+    const halfDepth = museumDepth / 2 - 1;
+    
+    // Constrain X position (left/right walls)
+    if (camera.position.x < -halfWidth) {
+        camera.position.x = -halfWidth;
+    } else if (camera.position.x > halfWidth) {
+        camera.position.x = halfWidth;
+    }
+    
+    // Constrain Z position (front/back walls)
+    if (camera.position.z < -halfDepth) {
+        camera.position.z = -halfDepth;
+    } else if (camera.position.z > halfDepth) {
+        camera.position.z = halfDepth;
+    }
+    
+    // Constrain Y position (floor/ceiling)
+    const currentFloorY = floorInfo[currentFloor].y;
+    if (camera.position.y < currentFloorY + 1.6) { // 1.6 is eye level
+        camera.position.y = currentFloorY + 1.6;
+    } else if (camera.position.y > currentFloorY + floorHeight - 0.5) { // 0.5m buffer from ceiling
+        camera.position.y = currentFloorY + floorHeight - 0.5;
+    }
+    
+    // Prevent going through stairs/elevator unless near them
+    const stairsX = museumWidth/2 - 3;
+    const elevatorX = -museumWidth/2 + 3;
+    const stairsZ = 0;
+    
+    // If not near stairs/elevator, constrain to current floor
+    const nearStairs = (
+        Math.abs(camera.position.x - stairsX) < 3 && 
+        Math.abs(camera.position.z - stairsZ) < 2
+    );
+    
+    const nearElevator = (
+        Math.abs(camera.position.x - elevatorX) < 2 && 
+        Math.abs(camera.position.z - stairsZ) < 2
+    );
+    
+    if (!nearStairs && !nearElevator) {
+        camera.position.y = floorInfo[currentFloor].y + 1.6;
+    }
+}
+
+// ========== UPDATED ANIMATION LOOP ==========
+function animate() {
+    requestAnimationFrame(animate);
+
+    // Movement
+    const moveSpeed = 0.2;
+    const direction = new THREE.Vector3();
+    camera.getWorldDirection(direction);
+    direction.y = 0;
+    direction.normalize();
+
+    if (controls.forward) camera.position.addScaledVector(direction, moveSpeed);
+    if (controls.backward) camera.position.addScaledVector(direction, -moveSpeed);
+    if (controls.left) camera.position.addScaledVector(new THREE.Vector3(-direction.z, 0, direction.x), moveSpeed);
+    if (controls.right) camera.position.addScaledVector(new THREE.Vector3(direction.z, 0, -direction.x), moveSpeed);
+    
+    // Vertical movement (elevator)
+    if (controls.up) {
+        camera.position.y += moveSpeed;
+        if (camera.position.y >= floorInfo[currentFloor + 1]?.y + 1.6) {
+            currentFloor = Math.min(2, currentFloor + 1);
+            floorIndicator.textContent = `Floor ${currentFloor + 1}: ${floorInfo[currentFloor].name}`;
+        }
+    }
+    if (controls.down) {
+        camera.position.y -= moveSpeed;
+        if (camera.position.y <= floorInfo[currentFloor - 1]?.y + 1.6) {
+            currentFloor = Math.max(0, currentFloor - 1);
+            floorIndicator.textContent = `Floor ${currentFloor + 1}: ${floorInfo[currentFloor].name}`;
+        }
+    }
+
+    // Apply boundary constraints
+    checkBoundaries();
+
+    renderer.render(scene, camera);
+}
+animate();

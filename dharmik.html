@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Three.js Ghibli FPS Museum</title>
+    <title>Three.js Ghibli Museum</title>
     <style>
         body {
             margin: 0;
@@ -28,16 +28,32 @@
         #instructions.hidden {
             display: none;
         }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin-top: -10px;
+            margin-left: -10px;
+            color: white;
+            font-size: 20px;
+            text-align: center;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
     <!-- Click to start instructions -->
     <div id="instructions">
-        <h1>Three.js Ghibli FPS Museum</h1>
+        <h1>Three.js Ghibli Museum</h1>
         <p>Click to start</p>
         <p>WASD to move, Mouse to look</p>
         <p>SPACE to jump, ESC to release cursor</p>
     </div>
+    
+    <!-- Crosshair -->
+    <div id="crosshair">+</div>
 
     <script type="module">
         // Import Three.js from CDN
@@ -47,8 +63,8 @@
         // -----------------------------------------------
         // 1. Create scene - this holds all objects, lights, etc.
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x91d5ff); // Ghibli sky blue
-        scene.fog = new THREE.Fog(0x91d5ff, 20, 60); // Reduced fog for better visibility
+        scene.background = new THREE.Color(0x91d5ff); // Ghibli sky blue for exterior windows
+        scene.fog = new THREE.Fog(0x91d5ff, 50, 100); // Reduced fog for indoor setting
 
         // 2. Create camera - player's viewpoint
         const camera = new THREE.PerspectiveCamera(
@@ -57,103 +73,315 @@
             0.1, // Near clipping plane
             1000 // Far clipping plane
         );
-        camera.position.y = 1.6; // Eye level height
-        camera.position.z = -5; // Starting position
         
         // 3. Create renderer - draws everything to the screen
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true; // Enable shadows
         renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
-        renderer.outputEncoding = THREE.sRGBEncoding; // Better color accuracy
         document.body.appendChild(renderer.domElement);
+        
+        // Create the camera rig system for proper controls
+        const cameraYaw = new THREE.Object3D(); // Horizontal rotation (body)
+        const cameraPitch = new THREE.Object3D(); // Vertical rotation (head)
 
-        // Improved Lighting Setup
+        // Position the camera rig at player height
+        cameraYaw.position.y = 1.6; // Eye level height
+
+        // Set up the hierarchy
+        scene.add(cameraYaw);
+        cameraYaw.add(cameraPitch);
+        cameraPitch.add(camera);
+
+        // Textures
         // -----------------------------------------------
-        // 1. Ambient light - general lighting from all directions (INCREASED)
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // Brighter ambient light
-        scene.add(ambientLight);
+        const textureLoader = new THREE.TextureLoader();
+        
+        const floorTexture = textureLoader.load('https://i.imgur.com/PxYjT5d.jpg');
+        floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
+        floorTexture.repeat.set(10, 10);
+        
+        const wallTexture = textureLoader.load('https://i.imgur.com/w1y3qXb.jpg');
+        wallTexture.wrapS = wallTexture.wrapT = THREE.RepeatWrapping;
+        wallTexture.repeat.set(2, 1);
+        
+        const ceilingTexture = textureLoader.load('https://i.imgur.com/jD2CSvF.jpg');
+        ceilingTexture.wrapS = ceilingTexture.wrapT = THREE.RepeatWrapping;
+        ceilingTexture.repeat.set(10, 10);
 
-        // 2. Directional light - sunlight (IMPROVED)
-        const sunLight = new THREE.DirectionalLight(0xffffff, 1.0);
-        sunLight.position.set(10, 20, 10);
-        sunLight.castShadow = true;
-        sunLight.shadow.mapSize.width = 2048;
-        sunLight.shadow.mapSize.height = 2048;
-        sunLight.shadow.camera.near = 0.5;
-        sunLight.shadow.camera.far = 50;
-        sunLight.shadow.camera.left = -30;
-        sunLight.shadow.camera.right = 30;
-        sunLight.shadow.camera.top = 30;
-        sunLight.shadow.camera.bottom = -30;
-        scene.add(sunLight);
-
-        // 3. Hemisphere light - sky/ground lighting (IMPROVED)
-        const hemisphereLight = new THREE.HemisphereLight(0xb1e1ff, 0x8dc272, 0.6);
-        scene.add(hemisphereLight);
-
-        // 4. Point lights for interior lighting
-        function createPointLight(x, y, z, color, intensity, distance) {
-            const light = new THREE.PointLight(color, intensity, distance);
-            light.position.set(x, y, z);
+        const paintingFrameTexture = textureLoader.load('https://i.imgur.com/VDKS19Y.jpg');
+        
+        // Main Exhibition Room and Connected Galleries
+        // -----------------------------------------------
+        const rooms = [];
+        const allWalls = [];
+        const allObjects = [];
+        
+        function createRoom(centerX, centerZ, width, depth, height, name) {
+            const room = {
+                name: name,
+                walls: [],
+                ceiling: null,
+                floor: null,
+                lights: []
+            };
+            
+            // Floor
+            const floorGeometry = new THREE.PlaneGeometry(width, depth);
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                map: floorTexture,
+                roughness: 0.8,
+                color: 0xFAF0E6  // Light warm color for wooden floor
+            });
+            
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set(centerX, 0, centerZ);
+            floor.receiveShadow = true;
+            scene.add(floor);
+            room.floor = floor;
+            
+            // Ceiling
+            const ceilingGeometry = new THREE.PlaneGeometry(width, depth);
+            const ceilingMaterial = new THREE.MeshStandardMaterial({
+                map: ceilingTexture,
+                roughness: 0.9,
+                color: 0xF5F5F5  // White ceiling
+            });
+            
+            const ceiling = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.set(centerX, height, centerZ);
+            ceiling.receiveShadow = true;
+            scene.add(ceiling);
+            room.ceiling = ceiling;
+            
+            // Create walls (only where there are no doorways)
+            // Helper to determine if there's a doorway at a specific position
+            function hasDoorway(wallX, wallZ, isVertical) {
+                // Define doorways between rooms
+                const doorways = [
+                    { from: { x: 0, z: -10 }, to: { x: 0, z: 0 }, width: 3 },  // Main entrance to lobby
+                    { from: { x: -15, z: 0 }, to: { x: -5, z: 0 }, width: 3 },  // Lobby to West Gallery
+                    { from: { x: 5, z: 0 }, to: { x: 15, z: 0 }, width: 3 },    // Lobby to East Gallery
+                    { from: { x: 0, z: 0 }, to: { x: 0, z: 10 }, width: 3 }     // Lobby to North Gallery
+                ];
+                
+                for (let doorway of doorways) {
+                    if (isVertical) {  // North-South walls
+                        // Check if wall is along a doorway's x-coordinate ± width/2
+                        if (Math.abs(wallX - doorway.from.x) < 1.5 && 
+                            ((wallZ >= doorway.from.z && wallZ <= doorway.to.z) || 
+                             (wallZ <= doorway.from.z && wallZ >= doorway.to.z))) {
+                            return true;
+                        }
+                    } else {  // East-West walls
+                        // Check if wall is along a doorway's z-coordinate ± width/2
+                        if (Math.abs(wallZ - doorway.from.z) < 1.5 && 
+                            ((wallX >= doorway.from.x && wallX <= doorway.to.x) || 
+                             (wallX <= doorway.from.x && wallX >= doorway.to.x))) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+            
+            // Calculate wall segments with doorway gaps
+            const halfWidth = width / 2;
+            const halfDepth = depth / 2;
+            
+            // North Wall (with check for doorway)
+            if (!hasDoorway(centerX, centerZ - halfDepth, false)) {
+                const northWall = createWall(
+                    centerX, centerZ - halfDepth, 
+                    width, height, 0.5, 
+                    wallTexture, 0xE6E6FA  // Light color for interior walls
+                );
+                room.walls.push(northWall);
+                allWalls.push(northWall);
+            } else {
+                // Create wall segments on either side of the doorway
+                const doorWidth = 3;
+                const leftWidth = (width - doorWidth) / 2;
+                const rightWidth = (width - doorWidth) / 2;
+                
+                if (leftWidth > 0) {
+                    const leftWall = createWall(
+                        centerX - doorWidth/2 - leftWidth/2, centerZ - halfDepth,
+                        leftWidth, height, 0.5,
+                        wallTexture, 0xE6E6FA
+                    );
+                    room.walls.push(leftWall);
+                    allWalls.push(leftWall);
+                }
+                
+                if (rightWidth > 0) {
+                    const rightWall = createWall(
+                        centerX + doorWidth/2 + rightWidth/2, centerZ - halfDepth,
+                        rightWidth, height, 0.5,
+                        wallTexture, 0xE6E6FA
+                    );
+                    room.walls.push(rightWall);
+                    allWalls.push(rightWall);
+                }
+            }
+            
+            // South Wall (with check for doorway)
+            if (!hasDoorway(centerX, centerZ + halfDepth, false)) {
+                const southWall = createWall(
+                    centerX, centerZ + halfDepth, 
+                    width, height, 0.5, 
+                    wallTexture, 0xE6E6FA
+                );
+                room.walls.push(southWall);
+                allWalls.push(southWall);
+            } else {
+                // Create wall segments on either side of the doorway
+                const doorWidth = 3;
+                const leftWidth = (width - doorWidth) / 2;
+                const rightWidth = (width - doorWidth) / 2;
+                
+                if (leftWidth > 0) {
+                    const leftWall = createWall(
+                        centerX - doorWidth/2 - leftWidth/2, centerZ + halfDepth,
+                        leftWidth, height, 0.5,
+                        wallTexture, 0xE6E6FA
+                    );
+                    room.walls.push(leftWall);
+                    allWalls.push(leftWall);
+                }
+                
+                if (rightWidth > 0) {
+                    const rightWall = createWall(
+                        centerX + doorWidth/2 + rightWidth/2, centerZ + halfDepth,
+                        rightWidth, height, 0.5,
+                        wallTexture, 0xE6E6FA
+                    );
+                    room.walls.push(rightWall);
+                    allWalls.push(rightWall);
+                }
+            }
+            
+            // East Wall (with check for doorway)
+            if (!hasDoorway(centerX + halfWidth, centerZ, true)) {
+                const eastWall = createWall(
+                    centerX + halfWidth, centerZ, 
+                    0.5, height, depth, 
+                    wallTexture, 0xF0E68C  // Light yellow for side walls
+                );
+                room.walls.push(eastWall);
+                allWalls.push(eastWall);
+            } else {
+                // Create wall segments on either side of the doorway
+                const doorWidth = 3;
+                const topDepth = (depth - doorWidth) / 2;
+                const bottomDepth = (depth - doorWidth) / 2;
+                
+                if (topDepth > 0) {
+                    const topWall = createWall(
+                        centerX + halfWidth, centerZ - doorWidth/2 - topDepth/2,
+                        0.5, height, topDepth,
+                        wallTexture, 0xF0E68C
+                    );
+                    room.walls.push(topWall);
+                    allWalls.push(topWall);
+                }
+                
+                if (bottomDepth > 0) {
+                    const bottomWall = createWall(
+                        centerX + halfWidth, centerZ + doorWidth/2 + bottomDepth/2,
+                        0.5, height, bottomDepth,
+                        wallTexture, 0xF0E68C
+                    );
+                    room.walls.push(bottomWall);
+                    allWalls.push(bottomWall);
+                }
+            }
+            
+            // West Wall (with check for doorway)
+            if (!hasDoorway(centerX - halfWidth, centerZ, true)) {
+                const westWall = createWall(
+                    centerX - halfWidth, centerZ, 
+                    0.5, height, depth, 
+                    wallTexture, 0xF0E68C
+                );
+                room.walls.push(westWall);
+                allWalls.push(westWall);
+            } else {
+                // Create wall segments on either side of the doorway
+                const doorWidth = 3;
+                const topDepth = (depth - doorWidth) / 2;
+                const bottomDepth = (depth - doorWidth) / 2;
+                
+                if (topDepth > 0) {
+                    const topWall = createWall(
+                        centerX - halfWidth, centerZ - doorWidth/2 - topDepth/2,
+                        0.5, height, topDepth,
+                        wallTexture, 0xF0E68C
+                    );
+                    room.walls.push(topWall);
+                    allWalls.push(topWall);
+                }
+                
+                if (bottomDepth > 0) {
+                    const bottomWall = createWall(
+                        centerX - halfWidth, centerZ + doorWidth/2 + bottomDepth/2,
+                        0.5, height, bottomDepth,
+                        wallTexture, 0xF0E68C
+                    );
+                    room.walls.push(bottomWall);
+                    allWalls.push(bottomWall);
+                }
+            }
+            
+            // Add ceiling lights
+            const lightCount = Math.floor((width * depth) / 40); // One light per 40 square units
+            for (let i = 0; i < lightCount; i++) {
+                // Position lights in a grid pattern
+                const cols = Math.ceil(Math.sqrt(lightCount));
+                const rows = Math.ceil(lightCount / cols);
+                
+                const col = i % cols;
+                const row = Math.floor(i / cols);
+                
+                const lightX = centerX - width/2 + width * (col + 0.5) / cols;
+                const lightZ = centerZ - depth/2 + depth * (row + 0.5) / rows;
+                
+                // Create a ceiling light
+                const light = createCeilingLight(lightX, height - 0.05, lightZ);
+                room.lights.push(light);
+            }
+            
+            return room;
+        }
+        
+        // Create ceiling light
+        function createCeilingLight(x, y, z) {
+            // Light fixture
+            const fixtureGeometry = new THREE.BoxGeometry(1, 0.1, 1);
+            const fixtureMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xFFFFFF,
+                emissive: 0xFFFFE0,
+                emissiveIntensity: 0.2
+            });
+            
+            const fixture = new THREE.Mesh(fixtureGeometry, fixtureMaterial);
+            fixture.position.set(x, y, z);
+            scene.add(fixture);
+            
+            // Add point light
+            const light = new THREE.PointLight(0xFFFFE0, 0.8, 15);
+            light.position.set(x, y - 0.1, z);
             light.castShadow = true;
             light.shadow.mapSize.width = 512;
             light.shadow.mapSize.height = 512;
             scene.add(light);
             
-            // Add small sphere to represent light (optional)
-            const lightSphere = new THREE.Mesh(
-                new THREE.SphereGeometry(0.2, 16, 8),
-                new THREE.MeshBasicMaterial({ color: color })
-            );
-            lightSphere.position.copy(light.position);
-            scene.add(lightSphere);
-            
-            return light;
+            return { fixture, light };
         }
-
-        // Add interior lights
-        const lights = [
-            createPointLight(0, 3, 0, 0xffffcc, 1, 20), // Center
-            createPointLight(-8, 3, -8, 0xffffcc, 1, 15), // Left front
-            createPointLight(8, 3, -8, 0xffffcc, 1, 15), // Right front
-            createPointLight(-8, 3, 8, 0xffffcc, 1, 15), // Left back
-            createPointLight(8, 3, 8, 0xffffcc, 1, 15), // Right back
-            createPointLight(0, 8, 0, 0xaaccff, 1, 20), // Upper floor center
-            createPointLight(-8, 8, -8, 0xffffcc, 1, 15), // Upper floor left front
-            createPointLight(8, 8, -8, 0xffffcc, 1, 15)  // Upper floor right front
-        ];
-
-        // Ground and Textures
-        // -----------------------------------------------
-        // 1. Load textures
-        const textureLoader = new THREE.TextureLoader();
-        const grassTexture = textureLoader.load('https://i.imgur.com/1Nmc0Pt.jpg');
-        grassTexture.wrapS = grassTexture.wrapT = THREE.RepeatWrapping;
-        grassTexture.repeat.set(20, 20);
-
-        const wallTexture = textureLoader.load('https://i.imgur.com/w1y3qXb.jpg');
-        wallTexture.wrapS = wallTexture.wrapT = THREE.RepeatWrapping;
-        wallTexture.repeat.set(2, 1);
         
-        const woodTexture = textureLoader.load('https://i.imgur.com/wO8bfni.jpg');
-        woodTexture.wrapS = woodTexture.wrapT = THREE.RepeatWrapping;
-        woodTexture.repeat.set(5, 5);
-
-        // 2. Create ground
-        const groundGeometry = new THREE.PlaneGeometry(100, 100);
-        const groundMaterial = new THREE.MeshStandardMaterial({ 
-            map: grassTexture,
-            roughness: 0.8,
-            color: 0x8aef92 // Vibrant Ghibli grass color
-        });
-        
-        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-        ground.rotation.x = -Math.PI / 2; // Rotate to horizontal
-        ground.receiveShadow = true; // Receive shadows
-        scene.add(ground);
-
-        // Wall and Object Creation Helper Functions
+        // Wall Creation Helper Function
         // -----------------------------------------------
         function createWall(x, z, width, height, depth, texture, color) {
             const wallGeometry = new THREE.BoxGeometry(width, height, depth);
@@ -168,152 +396,28 @@
             wall.castShadow = true;
             wall.receiveShadow = true;
             
+            // Add wall to scene
             scene.add(wall);
             return wall;
         }
-
-        function createStairs(startX, startY, startZ, width, riserHeight, treadDepth, steps) {
-            const stairs = [];
-            
-            for (let i = 0; i < steps; i++) {
-                const stepGeometry = new THREE.BoxGeometry(width, riserHeight, treadDepth);
-                const stepMaterial = new THREE.MeshStandardMaterial({
-                    map: woodTexture,
-                    color: 0xe8c28f, // Warm wood color
-                    roughness: 0.6
-                });
-                
-                const step = new THREE.Mesh(stepGeometry, stepMaterial);
-                step.position.set(
-                    startX,
-                    startY + (i * riserHeight) + (riserHeight / 2),
-                    startZ - (i * treadDepth) - (treadDepth / 2)
-                );
-                
-                step.castShadow = true;
-                step.receiveShadow = true;
-                scene.add(step);
-                stairs.push(step);
-            }
-            
-            return stairs;
-        }
-
-        function createFloor(x, y, z, width, height, depth, texture, color) {
-            const floorGeometry = new THREE.BoxGeometry(width, height, depth);
-            const floorMaterial = new THREE.MeshStandardMaterial({
-                map: texture,
-                color: color,
-                roughness: 0.6
-            });
-            
-            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-            floor.position.set(x, y, z);
-            floor.castShadow = true;
-            floor.receiveShadow = true;
-            scene.add(floor);
-            return floor;
-        }
         
-        function createColumn(x, y, z, radius, height, color) {
-            const geometry = new THREE.CylinderGeometry(radius, radius, height, 16);
-            const material = new THREE.MeshStandardMaterial({
-                color: color,
-                roughness: 0.5
-            });
-            
-            const column = new THREE.Mesh(geometry, material);
-            column.position.set(x, y + height/2, z);
-            column.castShadow = true;
-            column.receiveShadow = true;
-            scene.add(column);
-            return column;
-        }
-
-        // Create Museum Walls (Interior Exhibition Space) with HIGHLY DIFFERENTIATED COLORS
-        // -----------------------------------------------
-        const walls = [
-            // Ground Floor
-            // Front wall with entrance gap (deep red-orange)
-            createWall(-7, -10, 6, 4, 0.5, wallTexture, 0xff6b4a),
-            createWall(7, -10, 6, 4, 0.5, wallTexture, 0xff6b4a),
-            
-            // Left wall (vibrant purple)
-            createWall(-10, 0, 0.5, 4, 20, wallTexture, 0xb19cd9),
-            
-            // Right wall (vibrant blue)
-            createWall(10, 0, 0.5, 4, 20, wallTexture, 0x4fb7d2),
-            
-            // Back wall (warm yellow)
-            createWall(0, 10, 20, 4, 0.5, wallTexture, 0xffda8f),
-            
-            // Second Floor (Upper Level)
-            // Front wall with entrance gap
-            createWall(-7, -10, 6, 4, 0.5, wallTexture, 0xff9a8f),
-            createWall(7, -10, 6, 4, 0.5, wallTexture, 0xff9a8f),
-            
-            // Left wall
-            createWall(-10, 0, 0.5, 4, 20, wallTexture, 0xd4c1ff),
-            
-            // Right wall
-            createWall(10, 0, 0.5, 4, 20, wallTexture, 0x7accff),
-            
-            // Back wall
-            createWall(0, 10, 20, 4, 0.5, wallTexture, 0xfff0a0)
-        ];
-
-        // Move second floor walls up
-        for (let i = 5; i < walls.length; i++) {
-            walls[i].position.y += 5; // Move up by 5 units
-        }
-
-        // Create Boundary Walls with DIFFERENT colors from museum walls
-        // -----------------------------------------------
-        const boundaries = [
-            // North boundary (teal green)
-            createWall(0, -30, 100, 12, 2, wallTexture, 0x21aa93),
-            
-            // South boundary (dark forest green)
-            createWall(0, 30, 100, 12, 2, wallTexture, 0x0d5c46),
-            
-            // West boundary (olive green)
-            createWall(-50, 0, 2, 12, 60, wallTexture, 0x768e3c),
-            
-            // East boundary (sage green)
-            createWall(50, 0, 2, 12, 60, wallTexture, 0x5a8a59)
-        ];
-
-        // Create second floor
-        const secondFloor = createFloor(0, 5, 0, 20, 0.5, 20, woodTexture, 0xf0d9b5);
-
-        // Create stairs
-        const mainStairs = createStairs(
-            0,        // startX
-            0,        // startY
-            -5,       // startZ
-            4,        // width
-            0.5,      // riserHeight
-            0.8,      // treadDepth
-            10        // steps
-        );
-
-        // Create decorative columns
-        const columns = [
-            createColumn(-8, 0, -8, 0.5, 4, 0xffd700),
-            createColumn(8, 0, -8, 0.5, 4, 0xffd700),
-            createColumn(-8, 0, 8, 0.5, 4, 0xffd700),
-            createColumn(8, 0, 8, 0.5, 4, 0xffd700),
-            
-            // Second floor columns
-            createColumn(-8, 5, -8, 0.5, 4, 0xe6c200),
-            createColumn(8, 5, -8, 0.5, 4, 0xe6c200),
-            createColumn(-8, 5, 8, 0.5, 4, 0xe6c200),
-            createColumn(8, 5, 8, 0.5, 4, 0xe6c200)
-        ];
-
-        // Add display pedestals in museum
-        const displayPedestals = [];
+        // Create museum rooms (with 4m high ceilings)
+        // Entrance Room
+        rooms.push(createRoom(0, -15, 20, 10, 4, "Entrance"));
         
+        // Main Lobby
+        rooms.push(createRoom(0, 0, 20, 20, 4, "Main Lobby"));
+        
+        // West Gallery
+        rooms.push(createRoom(-15, 0, 10, 20, 4, "West Gallery"));
+        
+        // East Gallery
+        rooms.push(createRoom(15, 0, 10, 20, 4, "East Gallery"));
+        
+        // North Gallery
+        rooms.push(createRoom(0, 15, 20, 10, 4, "North Gallery"));
+        
+        // Create display pedestals in museum
         function createPedestal(x, y, z) {
             const baseGeometry = new THREE.BoxGeometry(1.5, 0.2, 1.5);
             const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x8a8a8a });
@@ -347,17 +451,16 @@
         }
         
         // Add pedestals around the museum
-        displayPedestals.push(...createPedestal(-5, 0, -5));
-        displayPedestals.push(...createPedestal(5, 0, -5));
-        displayPedestals.push(...createPedestal(-5, 0, 5));
-        displayPedestals.push(...createPedestal(5, 0, 5));
+        // Main Lobby
+        const pedestals = [];
+        pedestals.push(...createPedestal(-6, 0, -6));
+        pedestals.push(...createPedestal(6, 0, -6));
+        pedestals.push(...createPedestal(-6, 0, 6));
+        pedestals.push(...createPedestal(6, 0, 6));
         
-        // Add pedestals on second floor
-        displayPedestals.push(...createPedestal(-5, 5, -5));
-        displayPedestals.push(...createPedestal(5, 5, -5));
-        displayPedestals.push(...createPedestal(-5, 5, 5));
-        displayPedestals.push(...createPedestal(5, 5, 5));
-
+        // Add to all objects
+        allObjects.push(...pedestals);
+        
         // Create decorative objects on pedestals
         function createSphere(x, y, z, radius, color) {
             const geometry = new THREE.SphereGeometry(radius, 32, 32);
@@ -374,28 +477,226 @@
             return sphere;
         }
 
-        // Add decorative objects
+        // Add decorative objects with VIBRANT COLORS
         const decorations = [
-            createSphere(-5, 1.7, -5, 0.4, 0xffcc00), // Gold sphere
-            createSphere(5, 1.7, -5, 0.4, 0x3399ff),  // Blue sphere
-            createSphere(-5, 1.7, 5, 0.4, 0xff5555),  // Red sphere
-            createSphere(5, 1.7, 5, 0.4, 0x33cc77),   // Green sphere
-            
-            // Second floor decorations
-            createSphere(-5, 6.7, -5, 0.4, 0xff9900), // Orange sphere
-            createSphere(5, 6.7, -5, 0.4, 0xcc66ff),  // Purple sphere
-            createSphere(-5, 6.7, 5, 0.4, 0x66ccff),  // Light blue sphere
-            createSphere(5, 6.7, 5, 0.4, 0xffff66)    // Yellow sphere
+            createSphere(-6, 1.7, -6, 0.4, 0xFFD700), // Bright gold
+            createSphere(6, 1.7, -6, 0.4, 0x00FFFF),  // Cyan
+            createSphere(-6, 1.7, 6, 0.4, 0xFF1493),  // Deep pink
+            createSphere(6, 1.7, 6, 0.4, 0x00FF7F)    // Spring green
         ];
-
-        // Collect all objects for collision detection
-        const allWalls = [...walls, ...boundaries];
-        const allStairs = [...mainStairs];
-        const allFloors = [secondFloor];
-        const allColumns = [...columns];
-        const allObjects = [...displayPedestals];
-
-        // FPS Controls with GRAVITY PHYSICS
+        
+        allObjects.push(...decorations);
+        
+        // Create paintings on walls
+        function createPainting(x, y, z, width, height, rotation, color) {
+            // Frame
+            const frameGeometry = new THREE.BoxGeometry(width + 0.2, height + 0.2, 0.1);
+            const frameMaterial = new THREE.MeshStandardMaterial({ 
+                map: paintingFrameTexture,
+                color: 0x8B4513
+            });
+            const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+            
+            // Canvas
+            const canvasGeometry = new THREE.PlaneGeometry(width, height);
+            const canvasMaterial = new THREE.MeshStandardMaterial({ 
+                color: color,
+                roughness: 0.5
+            });
+            const canvas = new THREE.Mesh(canvasGeometry, canvasMaterial);
+            canvas.position.z = 0.06; // Slightly in front of the frame
+            
+            // Group frame and canvas
+            const painting = new THREE.Group();
+            painting.add(frame);
+            painting.add(canvas);
+            painting.position.set(x, y, z);
+            painting.rotation.y = rotation;
+            
+            scene.add(painting);
+            allObjects.push(frame);
+            return painting;
+        }
+        
+        // Add paintings to the walls in each gallery
+        // West Gallery paintings (on east and west walls)
+        const ghibliColors = [
+            0x91d5ff, // Sky blue
+            0x63a355, // Grass green
+            0xffe6cc, // Light orange
+            0xffeedd, // Warm light
+            0xFF4500, // Orange-red
+            0x9370DB, // Purple
+            0x00BFFF, // Blue
+            0xFFD700  // Gold
+        ];
+        
+        // West Gallery - East Wall (faced when entering from lobby)
+        for (let i = 0; i < 3; i++) {
+            createPainting(
+                -10, // x
+                1.8,  // y
+                -5 + i * 5, // z
+                1.5, // width
+                1.2, // height
+                -Math.PI / 2, // rotation
+                ghibliColors[i % ghibliColors.length]
+            );
+        }
+        
+        // West Gallery - West Wall
+        for (let i = 0; i < 3; i++) {
+            createPainting(
+                -19.7, // x
+                1.8,  // y
+                -5 + i * 5, // z
+                1.5, // width
+                1.2, // height
+                Math.PI / 2, // rotation
+                ghibliColors[(i + 3) % ghibliColors.length]
+            );
+        }
+        
+        // East Gallery - West Wall (faced when entering from lobby)
+        for (let i = 0; i < 3; i++) {
+            createPainting(
+                10, // x
+                1.8,  // y
+                -5 + i * 5, // z
+                1.5, // width
+                1.2, // height
+                Math.PI / 2, // rotation
+                ghibliColors[(i + 2) % ghibliColors.length]
+            );
+        }
+        
+        // East Gallery - East Wall
+        for (let i = 0; i < 3; i++) {
+            createPainting(
+                19.7, // x
+                1.8,  // y
+                -5 + i * 5, // z
+                1.5, // width
+                1.2, // height
+                -Math.PI / 2, // rotation
+                ghibliColors[(i + 5) % ghibliColors.length]
+            );
+        }
+        
+        // North Gallery - North Wall
+        for (let i = 0; i < 5; i++) {
+            createPainting(
+                -7.5 + i * 4, // x
+                1.8,  // y
+                19.7, // z
+                1.5, // width
+                1.2, // height
+                Math.PI, // rotation
+                ghibliColors[(i + 1) % ghibliColors.length]
+            );
+        }
+        
+        // North Gallery - East and West Walls
+        createPainting(
+            9.7, // x
+            1.8,  // y
+            15, // z
+            1.5, // width
+            1.2, // height
+            -Math.PI / 2, // rotation
+            ghibliColors[3]
+        );
+        
+        createPainting(
+            -9.7, // x
+            1.8,  // y
+            15, // z
+            1.5, // width
+            1.2, // height
+            Math.PI / 2, // rotation
+            ghibliColors[6]
+        );
+        
+        // Add ambient lighting (reduced from outdoors)
+        const ambientLight = new THREE.AmbientLight(0xffe6cc, 0.4);
+        scene.add(ambientLight);
+        
+        // Add directional light (for shadows - coming from windows)
+        const sunLight = new THREE.DirectionalLight(0xffeedd, 0.5);
+        sunLight.position.set(10, 15, 10);
+        sunLight.castShadow = true;
+        sunLight.shadow.camera.far = 50;
+        sunLight.shadow.mapSize.width = 1024;
+        sunLight.shadow.mapSize.height = 1024;
+        scene.add(sunLight);
+        
+        // Create Ghibli-inspired dust particles
+        function createDustParticles() {
+            const particlesCount = 150; // More particles for the larger space
+            const particles = new THREE.Group();
+            
+            for (let i = 0; i < particlesCount; i++) {
+                const size = Math.random() * 0.05 + 0.02;
+                const geometry = new THREE.SphereGeometry(size, 8, 8);
+                const material = new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: Math.random() * 0.3 + 0.2
+                });
+                
+                const particle = new THREE.Mesh(geometry, material);
+                
+                // Randomly position dust in all rooms
+                const room = Math.floor(Math.random() * rooms.length);
+                let x, z;
+                
+                switch(room) {
+                    case 0: // Entrance
+                        x = Math.random() * 18 - 9;
+                        z = Math.random() * 8 - 19;
+                        break;
+                    case 1: // Main Lobby
+                        x = Math.random() * 18 - 9;
+                        z = Math.random() * 18 - 9;
+                        break;
+                    case 2: // West Gallery
+                        x = Math.random() * 8 - 19;
+                        z = Math.random() * 18 - 9;
+                        break;
+                    case 3: // East Gallery
+                        x = Math.random() * 8 + 11;
+                        z = Math.random() * 18 - 9;
+                        break;
+                    case 4: // North Gallery
+                        x = Math.random() * 18 - 9;
+                        z = Math.random() * 8 + 11;
+                        break;
+                }
+                
+                particle.position.set(
+                    x, 
+                    Math.random() * 3 + 1,
+                    z
+                );
+                
+                // Random floating animation properties
+                particle.userData = {
+                    speed: Math.random() * 0.005 + 0.001,
+                    offsetX: Math.random() * Math.PI * 2,
+                    offsetY: Math.random() * Math.PI * 2,
+                    amplitude: Math.random() * 0.1 + 0.05
+                };
+                
+                particles.add(particle);
+            }
+            
+            scene.add(particles);
+            return particles;
+        }
+        
+        const dustParticles = createDustParticles();
+        
+        // Controls with GRAVITY PHYSICS
         // -----------------------------------------------
         let isLocked = false;
         let keys = {
@@ -408,8 +709,8 @@
         
         // Physics variables
         let velocity = new THREE.Vector3(0, 0, 0);
-        let gravity = -0.01;
-        let jumpForce = 0.2;
+        let gravity = -0.005;
+        let jumpForce = 0.15;
         let isOnGround = true;
         
         // Event Listeners
@@ -440,403 +741,192 @@
             const movementX = event.movementX || 0;
             const movementY = event.movementY || 0;
             
-            // Rotate camera based on mouse movement
-            camera.rotation.y -= movementX * 0.002;
-            camera.rotation.x -= movementY * 0.002;
+            // Apply horizontal rotation to the body (yaw)
+            cameraYaw.rotation.y -= movementX * 0.002;
             
-            // Clamp vertical rotation to prevent flipping
-            camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+            // Apply vertical rotation to the head (pitch) with constraints
+            cameraPitch.rotation.x -= movementY * 0.002;
+            
+            // Limit vertical head movement to realistic angles (about 75 degrees up and down)
+            // Limit vertical head movement to realistic angles (about 75 degrees up and down)
+            cameraPitch.rotation.x = Math.max(-Math.PI * 0.4, Math.min(Math.PI * 0.4, cameraPitch.rotation.x));
         });
         
         // 4. Keyboard controls
         document.addEventListener('keydown', (event) => {
-            switch (event.key.toLowerCase()) {
-                case 'w':
-                    keys.w = true;
-                    break;
-                case 'a':
-                    keys.a = true;
-                    break;
-                case 's':
-                    keys.s = true;
-                    break;
-                case 'd':
-                    keys.d = true;
-                    break;
-                case ' ':
-                    keys.space = true;
-                    // Jump when on the ground
-                    if (isOnGround) {
-                        velocity.y = jumpForce;
-                        isOnGround = false;
-                    }
-                    break;
+            switch (event.code) {
+                case 'KeyW': keys.w = true; break;
+                case 'KeyA': keys.a = true; break;
+                case 'KeyS': keys.s = true; break;
+                case 'KeyD': keys.d = true; break;
+                case 'Space': keys.space = true; break;
+                case 'Escape': if (isLocked) document.exitPointerLock(); break;
             }
         });
         
         document.addEventListener('keyup', (event) => {
-            switch (event.key.toLowerCase()) {
-                case 'w':
-                    keys.w = false;
-                    break;
-                case 'a':
-                    keys.a = false;
-                    break;
-                case 's':
-                    keys.s = false;
-                    break;
-                case 'd':
-                    keys.d = false;
-                    break;
-                case ' ':
-                    keys.space = false;
-                    break;
+            switch (event.code) {
+                case 'KeyW': keys.w = false; break;
+                case 'KeyA': keys.a = false; break;
+                case 'KeyS': keys.s = false; break;
+                case 'KeyD': keys.d = false; break;
+                case 'Space': keys.space = false; break;
             }
         });
         
-        // Movement and Collision Detection with GRAVITY and STAIR SUPPORT
-        // -----------------------------------------------
-        const moveSpeed = 0.15;
-        const groundLevel = 0;
-        const playerHeight = 1.6; // Camera height (player's eye level)
-        const playerRadius = 0.5; // Collision radius for the player
-        const stepHeight = 0.6;   // Maximum height player can automatically step up
+        // Collision detection
+        function checkCollision(position) {
+            // Player radius (collision cylinder)
+            const playerRadius = 0.5;
+            const playerHeight = 1.6;
+            
+            // Check wall collisions
+            for (let wall of allWalls) {
+                // Simple box collision test
+                const wallBox = new THREE.Box3().setFromObject(wall);
+                
+                // Create a slightly larger box for the player position
+                const playerBox = new THREE.Box3();
+                playerBox.min.set(
+                    position.x - playerRadius,
+                    position.y,
+                    position.z - playerRadius
+                );
+                playerBox.max.set(
+                    position.x + playerRadius,
+                    position.y + playerHeight,
+                    position.z + playerRadius
+                );
+                
+                if (playerBox.intersectsBox(wallBox)) {
+                    return true; // Collision detected
+                }
+            }
+            
+            // Check object collisions
+            for (let object of allObjects) {
+                const objectBox = new THREE.Box3().setFromObject(object);
+                
+                // Check if player cylinder intersects with object box
+                const dx = position.x - Math.max(objectBox.min.x, Math.min(position.x, objectBox.max.x));
+                const dz = position.z - Math.max(objectBox.min.z, Math.min(position.z, objectBox.max.z));
+                
+                if (dx * dx + dz * dz < playerRadius * playerRadius &&
+                    position.y < objectBox.max.y && position.y + playerHeight > objectBox.min.y) {
+                    return true; // Collision detected
+                }
+            }
+            
+            return false; // No collision
+        }
         
-        // Animation frame function to handle movement and physics
+        // Animation loop
+        // -----------------------------------------------
         function animate() {
             requestAnimationFrame(animate);
             
+            // Only process movement if pointer is locked
             if (isLocked) {
-                // Apply gravity to vertical velocity
+                // Apply gravity
                 velocity.y += gravity;
                 
-                // Horizontal movement based on camera direction
-                const direction = new THREE.Vector3();
-                
-                // Get camera's forward direction
-                camera.getWorldDirection(direction);
-                direction.y = 0;
-                direction.normalize();
-                
-                // Calculate right vector for strafing
-                const right = new THREE.Vector3(-direction.z, 0, direction.x);
-                
-                // Reset horizontal movement
-                velocity.x = 0;
-                velocity.z = 0;
-                
-                // Apply input direction based on keys
-                if (keys.w) {
-                    velocity.x += direction.x * moveSpeed;
-                    velocity.z += direction.z * moveSpeed;
-                }
-                if (keys.s) {
-                    velocity.x -= direction.x * moveSpeed;
-                    velocity.z -= direction.z * moveSpeed;
-                }
-                if (keys.a) {
-                    velocity.x += right.x * moveSpeed;
-                    velocity.z += right.z * moveSpeed;
-                }
-                if (keys.d) {
-                    velocity.x -= right.x * moveSpeed;
-                    velocity.z -= right.z * moveSpeed;
-                }
-                
-                // Create the next position
-                const nextPosition = camera.position.clone().add(velocity);
-                
-                // Check for floor or stairs below player to handle gravity/stepping
-                const rayDown = new THREE.Raycaster(
-                    camera.position.clone(),
-                    new THREE.Vector3(0, -1, 0),
-                    0,
-                    playerHeight + 0.2
-                );
-                
-                // First check stairs and floors
-                const floorIntersects = rayDown.intersectObjects([ground, ...allFloors, ...allStairs]);
-                if (floorIntersects.length > 0) {
-                    // We hit something below us
-                    const distanceToFloor = floorIntersects[0].distance;
-                    
-                    // If we're close enough to ground to be considered "on ground"
-                    if (distanceToFloor <= playerHeight + 0.1) {
-                        // Land on the surface (apply slight offset to prevent flickering)
-                        nextPosition.y = floorIntersects[0].point.y + playerHeight + 0.01;
-                        velocity.y = 0;
-                        isOnGround = true;
-                    }
-                } else {
-                    // No floor beneath us, we're falling
+                // Jump if on ground and space pressed
+                if (keys.space && isOnGround) {
+                    velocity.y = jumpForce;
                     isOnGround = false;
                 }
                 
-                // Check wall collisions (horizontal plane only)
-                let canMove = true;
+                // Movement speed
+                const speed = 0.1;
                 
-                // Create a spherical player collision body
-                const playerPosition = nextPosition.clone();
-                playerPosition.y -= playerHeight / 2; // Move collision center down from camera
+                // Calculate movement direction relative to camera orientation
+                const moveDirection = new THREE.Vector3(0, 0, 0);
                 
-                // Check collisions with walls, columns and objects
-                const allCollidables = [
-                    ...allWalls,
-                    ...allColumns,
-                    ...allObjects.flat(), // Flatten the nested pedestal arrays
-                ];
+                if (keys.w) moveDirection.z -= 1;
+                if (keys.s) moveDirection.z += 1;
+                if (keys.a) moveDirection.x -= 1;
+                if (keys.d) moveDirection.x += 1;
                 
-                // Check each collidable object for intersection
-                for (const object of allCollidables) {
-                    // Create a bounding box for the object
-                    const objectBox = new THREE.Box3().setFromObject(object);
+                // Normalize if moving diagonally to prevent faster diagonal movement
+                if (moveDirection.length() > 0) {
+                    moveDirection.normalize();
+                }
+                
+                // Create a rotation matrix from the camera's yaw rotation
+                const rotationMatrix = new THREE.Matrix4();
+                rotationMatrix.makeRotationY(cameraYaw.rotation.y);
+                
+                // Apply the rotation to the movement direction
+                moveDirection.applyMatrix4(rotationMatrix);
+                
+                // Scale by speed
+                moveDirection.multiplyScalar(speed);
+                
+                // Store current position for collision detection
+                const oldPosition = cameraYaw.position.clone();
+                
+                // Try to move horizontally (X and Z)
+                const horizontalMovement = new THREE.Vector3(moveDirection.x, 0, moveDirection.z);
+                cameraYaw.position.add(horizontalMovement);
+                
+                // If there's a collision, revert to old position
+                if (checkCollision(cameraYaw.position)) {
+                    cameraYaw.position.copy(oldPosition);
                     
-                    // For simplicity, use distance check from player position to object center
-                    const objectCenter = new THREE.Vector3();
-                    objectBox.getCenter(objectCenter);
-                    
-                    // Calculate bounding sphere radius (approximation)
-                    const size = new THREE.Vector3();
-                    objectBox.getSize(size);
-                    const objectRadius = Math.max(size.x, size.z) / 2;
-                    
-                    // Get distance on horizontal plane only (ignore Y)
-                    const horizontalDist = new THREE.Vector2(
-                        playerPosition.x - objectCenter.x,
-                        playerPosition.z - objectCenter.z
-                    ).length();
-                    
-                    // Check if we're colliding (with some margin)
-                    if (horizontalDist < playerRadius + objectRadius + 0.2) {
-                        canMove = false;
-                        break;
+                    // Try moving only in X direction
+                    cameraYaw.position.x += moveDirection.x;
+                    if (checkCollision(cameraYaw.position)) {
+                        cameraYaw.position.x = oldPosition.x;
+                        
+                        // Try moving only in Z direction
+                        cameraYaw.position.z += moveDirection.z;
+                        if (checkCollision(cameraYaw.position)) {
+                            cameraYaw.position.z = oldPosition.z;
+                        }
                     }
                 }
                 
-                // Apply movement if no collision
-                if (canMove) {
-                    camera.position.copy(nextPosition);
-                } else {
-                    // Try sliding along walls by attempting X and Z movements separately
-                    const xOnly = camera.position.clone();
-                    xOnly.x += velocity.x;
-                    
-                    const zOnly = camera.position.clone();
-                    zOnly.z += velocity.z;
-                    
-                    // Check X-only movement
-                    let canMoveX = true;
-                    for (const object of allCollidables) {
-                        const objectBox = new THREE.Box3().setFromObject(object);
-                        const objectCenter = new THREE.Vector3();
-                        objectBox.getCenter(objectCenter);
-                        
-                        const size = new THREE.Vector3();
-                        objectBox.getSize(size);
-                        const objectRadius = Math.max(size.x, size.z) / 2;
-                        
-                        const xDist = new THREE.Vector2(
-                            xOnly.x - objectCenter.x,
-                            xOnly.z - objectCenter.z
-                        ).length();
-                        
-                        if (xDist < playerRadius + objectRadius + 0.2) {
-                            canMoveX = false;
-                            break;
-                        }
-                    }
-                    
-                    // Check Z-only movement
-                    let canMoveZ = true;
-                    for (const object of allCollidables) {
-                        const objectBox = new THREE.Box3().setFromObject(object);
-                        const objectCenter = new THREE.Vector3();
-                        objectBox.getCenter(objectCenter);
-                        
-                        const size = new THREE.Vector3();
-                        objectBox.getSize(size);
-                        const objectRadius = Math.max(size.x, size.z) / 2;
-                        
-                        const zDist = new THREE.Vector2(
-                            zOnly.x - objectCenter.x,
-                            zOnly.z - objectCenter.z
-                        ).length();
-                        
-                        if (zDist < playerRadius + objectRadius + 0.2) {
-                            canMoveZ = false;
-                            break;
-                        }
-                    }
-                    
-                    // Apply the valid directional movements
-                    if (canMoveX) {
-                        camera.position.x = xOnly.x;
-                    }
-                    
-                    if (canMoveZ) {
-                        camera.position.z = zOnly.z;
-                    }
-                    
-                    // Always apply gravity (Y velocity)
-                    camera.position.y += velocity.y;
-                }
+                // Apply gravity/vertical movement
+                cameraYaw.position.y += velocity.y;
                 
-                // Check for ground collision (min height)
-                if (camera.position.y < groundLevel + playerHeight) {
-                    camera.position.y = groundLevel + playerHeight;
+                // Check for ground collision
+                if (cameraYaw.position.y < 1.6) { // Eye height
+                    cameraYaw.position.y = 1.6;
                     velocity.y = 0;
                     isOnGround = true;
                 }
+                
+                // Check for ceiling collision
+                if (cameraYaw.position.y > 3.9) { // Ceiling height is 4.0
+                    cameraYaw.position.y = 3.9;
+                    velocity.y = 0;
+                }
             }
             
-            // Render the scene
-            renderer.render(scene, camera);
-        }
-        
-        // Add Ghibli-inspired decorative elements
-        // -----------------------------------------------
-        
-        // Create floating dust particles (like in Ghibli films)
-        function createDustParticles() {
-            const particlesCount = 200;
-            const particles = new THREE.Group();
-            
-            for (let i = 0; i < particlesCount; i++) {
-                const size = Math.random() * 0.05 + 0.02;
-                const geometry = new THREE.SphereGeometry(size, 8, 8);
-                const material = new THREE.MeshBasicMaterial({
-                    color: 0xffffff,
-                    transparent: true,
-                    opacity: Math.random() * 0.3 + 0.2
-                });
-                
-                const particle = new THREE.Mesh(geometry, material);
-                
-                // Random position within the museum
-                particle.position.set(
-                    (Math.random() - 0.5) * 18, 
-                    Math.random() * 8 + 1,
-                    (Math.random() - 0.5) * 18
-                );
-                
-                // Random floating animation properties
-                particle.userData = {
-                    speed: Math.random() * 0.005 + 0.001,
-                    offsetX: Math.random() * Math.PI * 2,
-                    offsetY: Math.random() * Math.PI * 2,
-                    amplitude: Math.random() * 0.1 + 0.05
-                };
-                
-                particles.add(particle);
-            }
-            
-            scene.add(particles);
-            return particles;
-        }
-        
-        const dustParticles = createDustParticles();
-        
-        // Add Garden Elements (Totoro-inspired)
-        function createTree(x, y, z, size) {
-            const trunkGeometry = new THREE.CylinderGeometry(size/5, size/4, size, 8);
-            const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-            trunk.position.set(x, y + size/2, z);
-            trunk.castShadow = true;
-            scene.add(trunk);
-            
-            const leavesGeometry = new THREE.SphereGeometry(size, 16, 16);
-            const leavesMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 });
-            const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
-            leaves.position.set(x, y + size + size/2, z);
-            leaves.scale.y = 1.2;
-            leaves.castShadow = true;
-            scene.add(leaves);
-            
-            return [trunk, leaves];
-        }
-        
-        // Add trees outside the museum
-        const trees = [
-            ...createTree(-20, 0, -15, 2),
-            ...createTree(-18, 0, -20, 3),
-            ...createTree(-24, 0, -18, 2.5),
-            ...createTree(20, 0, -15, 2.5),
-            ...createTree(18, 0, -20, 2),
-            ...createTree(24, 0, -18, 3),
-            ...createTree(-20, 0, 15, 3),
-            ...createTree(-18, 0, 20, 2),
-            ...createTree(20, 0, 15, 2.5),
-            ...createTree(18, 0, 20, 3)
-        ];
-        
-        // Add a small pond (Ghibli-inspired water feature)
-        function createPond(x, y, z, radius) {
-            const geometry = new THREE.CircleGeometry(radius, 32);
-            const material = new THREE.MeshStandardMaterial({
-                color: 0x3399ff,
-                metalness: 0.9,
-                roughness: 0.1
-            });
-            
-            const pond = new THREE.Mesh(geometry, material);
-            pond.rotation.x = -Math.PI / 2;
-            pond.position.set(x, y + 0.01, z); // Slightly above ground
-            pond.receiveShadow = true;
-            scene.add(pond);
-            
-            // Add pond ripples
-            const rippleGeometry = new THREE.RingGeometry(radius * 0.6, radius * 0.7, 32);
-            const rippleMaterial = new THREE.MeshBasicMaterial({
-                color: 0xffffff,
-                transparent: true,
-                opacity: 0.3
-            });
-            
-            const ripple = new THREE.Mesh(rippleGeometry, rippleMaterial);
-            ripple.rotation.x = -Math.PI / 2;
-            ripple.position.copy(pond.position);
-            ripple.position.y += 0.02;
-            scene.add(ripple);
-            
-            return [pond, ripple];
-        }
-        
-        // Create a pond outside
-        const pond = createPond(-15, 0.02, 0, 5);
-        
-        // Animate the dust particles and ripples
-        function animateGhibliEffects() {
             // Animate dust particles
-            dustParticles.children.forEach((particle) => {
+            dustParticles.children.forEach(particle => {
                 const { speed, offsetX, offsetY, amplitude } = particle.userData;
-                particle.position.y += Math.sin(Date.now() * speed + offsetY) * 0.01;
-                particle.position.x += Math.sin(Date.now() * speed + offsetX) * 0.005;
+                
+                // Gentle floating motion
+                particle.position.y += Math.sin(Date.now() * speed + offsetY) * 0.001;
+                particle.position.x += Math.sin(Date.now() * speed + offsetX) * 0.0005;
+                particle.position.z += Math.cos(Date.now() * speed + offsetX) * 0.0005;
+                
+                // Reset particles that drift too far from their original position
+                if (Math.abs(particle.position.y - particle.userData.originalY) > amplitude) {
+                    particle.position.y = particle.userData.originalY + 
+                        Math.sin(Date.now() * speed + offsetY) * amplitude;
+                }
             });
-            
-            // Animate pond ripple
-            if (pond[1]) {
-                const ripple = pond[1];
-                ripple.scale.x = 0.9 + Math.sin(Date.now() * 0.001) * 0.1;
-                ripple.scale.y = 0.9 + Math.sin(Date.now() * 0.001) * 0.1;
-            }
-        }
-        
-        // Expand the animation loop to include Ghibli effects
-        function mainAnimationLoop() {
-            requestAnimationFrame(mainAnimationLoop);
-            
-            if (isLocked) {
-                // Player movement & physics calculated in the animate() function
-                animate();
-            }
-            
-            // Animate Ghibli-style effects separately
-            animateGhibliEffects();
             
             // Render the scene
             renderer.render(scene, camera);
         }
+        
+        // Store original y positions for dust particles
+        dustParticles.children.forEach(particle => {
+            particle.userData.originalY = particle.position.y;
+        });
         
         // Handle window resize
         window.addEventListener('resize', () => {
@@ -846,7 +936,7 @@
         });
         
         // Start animation loop
-        mainAnimationLoop();
+        animate();
     </script>
 </body>
 </html>

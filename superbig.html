@@ -65,7 +65,10 @@
         // 3. Create renderer - draws everything to the screen
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true; // Enable shadows
+       
+        //imp imp imp 
+       
+        // renderer.shadowMap.enabled = true; // Enable shadows
         renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
         renderer.outputEncoding = THREE.sRGBEncoding; // Better color accuracy
         document.body.appendChild(renderer.domElement);
@@ -131,14 +134,17 @@
         // 1. Load textures
         const textureLoader = new THREE.TextureLoader();
         const grassTexture = textureLoader.load('https://i.imgur.com/1Nmc0Pt.jpg');
+        // const grassTexture = textureLoader.load('grass.jpg');
         grassTexture.wrapS = grassTexture.wrapT = THREE.RepeatWrapping;
         grassTexture.repeat.set(20, 20);
 
         const wallTexture = textureLoader.load('https://i.imgur.com/w1y3qXb.jpg');
+        // const wallTexture = textureLoader.load('wall.avif');
         wallTexture.wrapS = wallTexture.wrapT = THREE.RepeatWrapping;
         wallTexture.repeat.set(2, 1);
         
         const woodTexture = textureLoader.load('https://i.imgur.com/wO8bfni.jpg');
+        // const wallTexture = textureLoader.load('wood.avif');
         woodTexture.wrapS = woodTexture.wrapT = THREE.RepeatWrapping;
         woodTexture.repeat.set(5, 5);
 
@@ -830,7 +836,8 @@
             
             if (isLocked) {
                 // Player movement & physics calculated in the animate() function
-                animate();
+                velocity.y += gravity;
+
             }
             
             // Animate Ghibli-style effects separately
@@ -849,6 +856,16 @@
         
         // Start animation loop
         mainAnimationLoop();
+
+        console.log("Geometries:", renderer.info.memory.geometries);
+        console.log("Textures:", renderer.info.memory.textures);
+
+console.log("Draw Calls:", renderer.info.render.calls);
+console.log("Frame Count:", renderer.info.render.frame);
+console.log("Lines:", renderer.info.render.lines);
+console.log("Points:", renderer.info.render.points);
+console.log("Triangles:", renderer.info.render.triangles);
+
     </script>
 </body>
 </html>

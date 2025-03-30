@@ -11,6 +11,16 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
+// Load textures
+const textureLoader = new THREE.TextureLoader();
+const marbleTexture = textureLoader.load('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
+marbleTexture.wrapS = marbleTexture.wrapT = THREE.RepeatWrapping;
+marbleTexture.repeat.set(4, 4);
+
+const woodTexture = textureLoader.load('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
+woodTexture.wrapS = woodTexture.wrapT = THREE.RepeatWrapping;
+woodTexture.repeat.set(2, 2);
+
 // ========== ENHANCED LIGHTING ==========
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
@@ -30,7 +40,7 @@ scene.add(windowLight);
 
 // ========== MUSEUM ARCHITECTURE ==========
 const floorMaterial = new THREE.MeshStandardMaterial({
-    color: 0xdddddd,
+    map: marbleTexture,
     roughness: 0.7,
     metalness: 0.3
 });
@@ -44,6 +54,11 @@ const wallMaterial = new THREE.MeshStandardMaterial({
 const floorHeight = 6;
 const museumWidth = 40;
 const museumDepth = 30;
+
+// Global arrays for collision detection
+const pillars = [];
+const walls = [];
+const stairs = [];
 
 // Generate floors
 for (let floor = 0; floor < 3; floor++) {
@@ -92,6 +107,7 @@ for (let floor = 0; floor < 3; floor++) {
         wallMesh.castShadow = true;
         wallMesh.receiveShadow = true;
         scene.add(wallMesh);
+        walls.push(wallMesh);
     });
     
     // Add decorative columns
@@ -102,6 +118,7 @@ for (let floor = 0; floor < 3; floor++) {
         );
         column.position.set(i, yPos + floorHeight/2, -museumDepth/2 + 2);
         scene.add(column);
+        pillars.push(column);
     }
     
     // Add paintings (10 per floor)
@@ -109,20 +126,70 @@ for (let floor = 0; floor < 3; floor++) {
     
     // Add stairs/elevators between floors
     if (floor < 2) {
-        const stairs = new THREE.Mesh(
-            new THREE.BoxGeometry(4, floorHeight, 3),
-            new THREE.MeshStandardMaterial({ color: 0x8B4513 })
-        );
-        stairs.position.set(museumWidth/2 - 3, yPos + floorHeight/2, 0);
-        scene.add(stairs);
+        // Create grand staircase
+        const stairWidth = 4;
+        const stairDepth = 3;
+        const stairHeight = floorHeight;
+        const steps = 10;
+        const stepHeight = stairHeight / steps;
+        const stepDepth = stairDepth / steps;
+
+        for (let i = 0; i < steps; i++) {
+            const step = new THREE.Mesh(
+                new THREE.BoxGeometry(stairWidth, stepHeight, stepDepth),
+                new THREE.MeshStandardMaterial({ 
+                    color: 0x8B4513,
+                    roughness: 0.8,
+                    metalness: 0.2
+                })
+            );
+            step.position.set(
+                museumWidth/2 - 3,
+                yPos + (i * stepHeight) + stepHeight/2,
+                (i * stepDepth) - stairDepth/2
+            );
+            step.castShadow = true;
+            step.receiveShadow = true;
+            scene.add(step);
+            stairs.push(step); // Add to stairs array for collision detection
+        }
+
+        // Add handrails
+        const handrailMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
         
+        // Left handrail
+        const leftHandrail = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.05, 0.05, stairHeight, 8),
+            handrailMaterial
+        );
+        leftHandrail.position.set(museumWidth/2 - 3, yPos + stairHeight/2, 0);
+        scene.add(leftHandrail);
+        
+        // Right handrail
+        const rightHandrail = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.05, 0.05, stairHeight, 8),
+            handrailMaterial
+        );
+        rightHandrail.position.set(museumWidth/2 - 3 + stairWidth, yPos + stairHeight/2, 0);
+        scene.add(rightHandrail);
+        
+        // Add elevator
         const elevator = new THREE.Mesh(
             new THREE.BoxGeometry(3, floorHeight, 3),
-            new THREE.MeshStandardMaterial({ color: 0x333333 })
+            new THREE.MeshStandardMaterial({ 
+                color: 0x333333,
+                metalness: 0.8,
+                roughness: 0.2
+            })
         );
         elevator.position.set(-museumWidth/2 + 3, yPos + floorHeight/2, 0);
+        elevator.castShadow = true;
+        elevator.receiveShadow = true;
         scene.add(elevator);
+        walls.push(elevator); // Add elevator to collision detection
     }
+
+    addInteriorPartitions(yPos);
 }
 
 // ========== ADD 30+ PAINTINGS ==========
@@ -174,7 +241,7 @@ function addPaintings(yPos, floor) {
                     break;
                 case 2: // Back wall
                     x = -museumWidth/2 + 5 + (i * 3.5);
-                    z = -museumDepth/2 + 0.2;
+                    z = -museumDepth/2 + 0.2;   
                     rotationY = Math.PI;
                     break;
                 case 3: // Front wall
@@ -247,6 +314,12 @@ document.addEventListener('mousemove', (e) => {
         camera.rotation.y -= e.movementX * 0.002;
         camera.rotation.x -= e.movementY * 0.002;
         camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+        
+        const newFloor = Math.floor(camera.position.y / floorHeight);
+        if (newFloor !== currentFloor && newFloor >= 0 && newFloor < 3) {
+            currentFloor = newFloor;
+            floorIndicator.textContent = `Floor ${currentFloor + 1}: ${floorInfo[currentFloor].name}`;
+        }
     }
 });
 
@@ -254,6 +327,60 @@ document.addEventListener('mousemove', (e) => {
 renderer.domElement.addEventListener('click', () => {
     renderer.domElement.requestPointerLock();
 });
+
+// ========== COLLISION DETECTION ==========
+function checkCollision(position, radius) {
+    // Check collision with pillars
+    for (const pillar of pillars) {
+        const pillarPosition = pillar.position;
+        const distance = new THREE.Vector2(
+            position.x - pillarPosition.x,
+            position.z - pillarPosition.z
+        ).length();
+        if (distance < 0.8 + radius) {
+            return true;
+        }
+    }
+
+    // Check collision with walls
+    for (const wall of walls) {
+        const wallPosition = wall.position;
+        const wallRotation = wall.rotation.y;
+        const wallWidth = wall.geometry.parameters.width;
+        const wallDepth = wall.geometry.parameters.depth;
+        
+        // Transform point to wall's local space
+        const localX = position.x - wallPosition.x;
+        const localZ = position.z - wallPosition.z;
+        
+        // Rotate point to wall's local space
+        const rotatedX = localX * Math.cos(-wallRotation) - localZ * Math.sin(-wallRotation);
+        const rotatedZ = localX * Math.sin(-wallRotation) + localZ * Math.cos(-wallRotation);
+        
+        // Check if point is within wall bounds
+        if (Math.abs(rotatedX) < wallWidth/2 + radius && 
+            Math.abs(rotatedZ) < wallDepth/2 + radius) {
+            return true;
+        }
+    }
+
+    // Check collision with stairs
+    for (const step of stairs) {
+        const stepPosition = step.position;
+        const stepWidth = step.geometry.parameters.width;
+        const stepDepth = step.geometry.parameters.depth;
+        
+        // Check if player is within step bounds
+        if (Math.abs(position.x - stepPosition.x) < stepWidth/2 + radius &&
+            Math.abs(position.z - stepPosition.z) < stepDepth/2 + radius &&
+            position.y >= stepPosition.y - step.geometry.parameters.height/2 &&
+            position.y <= stepPosition.y + step.geometry.parameters.height/2) {
+            return true;
+        }
+    }
+    
+    return false;
+}
 
 // ========== ANIMATION LOOP ==========
 function animate() {
@@ -266,25 +393,45 @@ function animate() {
     direction.y = 0;
     direction.normalize();
 
+    // Store previous position for collision detection
+    const previousPosition = camera.position.clone();
+
+    // Apply movement
     if (controls.forward) camera.position.addScaledVector(direction, moveSpeed);
     if (controls.backward) camera.position.addScaledVector(direction, -moveSpeed);
-    if (controls.left) camera.position.addScaledVector(new THREE.Vector3(-direction.z, 0, direction.x), moveSpeed);
-    if (controls.right) camera.position.addScaledVector(new THREE.Vector3(direction.z, 0, -direction.x), moveSpeed);
+    if (controls.left) camera.position.addScaledVector(new THREE.Vector3(direction.z, 0, -direction.x), moveSpeed);
+    if (controls.right) camera.position.addScaledVector(new THREE.Vector3(-direction.z, 0, direction.x), moveSpeed);
     
-    // Vertical movement (elevator)
-    if (controls.up && camera.position.y < floorHeight * 2 + 1.6) {
-        camera.position.y += moveSpeed;
-        if (camera.position.y >= floorInfo[currentFloor + 1]?.y + 1.6) {
-            currentFloor++;
-            floorIndicator.textContent = `Floor ${currentFloor + 1}: ${floorInfo[currentFloor].name}`;
+    // Stair climbing logic
+    let isOnStairs = false;
+    let currentStep = null;
+    
+    for (const step of stairs) {
+        const stepPosition = step.position;
+        const stepWidth = step.geometry.parameters.width;
+        const stepDepth = step.geometry.parameters.depth;
+        
+        // Check if player is on a step
+        if (Math.abs(camera.position.x - stepPosition.x) < stepWidth/2 + 0.5 &&
+            Math.abs(camera.position.z - stepPosition.z) < stepDepth/2 + 0.5) {
+            isOnStairs = true;
+            currentStep = step;
+            // Adjust player height to match step height
+            camera.position.y = stepPosition.y + 1.6;
+            
+            // Update current floor based on step position
+            const stepFloor = Math.floor(stepPosition.y / floorHeight);
+            if (stepFloor !== currentFloor) {
+                currentFloor = stepFloor;
+                floorIndicator.textContent = `Floor ${currentFloor + 1}: ${floorInfo[currentFloor].name}`;
+            }
+            break;
         }
     }
-    if (controls.down && camera.position.y > 1.6) {
-        camera.position.y -= moveSpeed;
-        if (camera.position.y <= floorInfo[currentFloor - 1]?.y + 1.6) {
-            currentFloor--;
-            floorIndicator.textContent = `Floor ${currentFloor + 1}: ${floorInfo[currentFloor].name}`;
-        }
+    
+    // Check for collisions
+    if (checkCollision(camera.position, 0.5)) {
+        camera.position.copy(previousPosition);
     }
 
     renderer.render(scene, camera);
@@ -297,3 +444,60 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+function addInteriorPartitions(yPos) {
+    const partitionMaterial = new THREE.MeshStandardMaterial({
+        color: 0xe0e0e0,
+        roughness: 0.6
+    });
+
+    // Center cross partition
+    const centerX = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, floorHeight, museumDepth/2),
+        partitionMaterial
+    );
+    centerX.position.set(0, yPos + floorHeight/2, 0);
+    centerX.castShadow = true;
+    centerX.receiveShadow = true;
+    scene.add(centerX);
+    walls.push(centerX);
+
+    const centerZ = new THREE.Mesh(
+        new THREE.BoxGeometry(museumWidth/2, floorHeight, 0.3),
+        partitionMaterial
+    );
+    centerZ.position.set(0, yPos + floorHeight/2, 0);
+    centerZ.castShadow = true;
+    centerZ.receiveShadow = true;
+    scene.add(centerZ);
+    walls.push(centerZ);
+
+    // Add gallery rooms
+    const roomSize = 15;
+    const rooms = [
+        { x: -museumWidth/4, z: -museumDepth/4 },
+        { x: museumWidth/4, z: -museumDepth/4 },
+        { x: -museumWidth/4, z: museumDepth/4 },
+        { x: museumWidth/4, z: museumDepth/4 }
+    ];
+
+    rooms.forEach(room => {
+        const roomWalls = [
+            { x: room.x, z: room.z, width: roomSize, depth: 0.3, rotationY: 0 },
+            { x: room.x, z: room.z, width: 0.3, depth: roomSize, rotationY: Math.PI/2 }
+        ];
+
+        roomWalls.forEach(wall => {
+            const wallMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(wall.width, floorHeight, wall.depth),
+                partitionMaterial
+            );
+            wallMesh.position.set(wall.x, yPos + floorHeight/2, wall.z);
+            wallMesh.rotation.y = wall.rotationY;
+            wallMesh.castShadow = true;
+            wallMesh.receiveShadow = true;
+            scene.add(wallMesh);
+            walls.push(wallMesh);
+        });
+    });
+}

@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Minecraft Museum Experience</title>
+  <style>
+    body { margin: 0; overflow: hidden; font-family: 'Courier New', monospace; }
+    canvas { display: block; }
+    .controls {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .title {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 5px;
+      font-size: 24px;
+      text-align: center;
+    }
+    .exhibit-info {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 20px;
+      border-radius: 5px;
+      max-width: 600px;
+      display: none;
+      z-index: 100;
+      text-align: center;
+    }
+    .exhibit-info h2 {
+      margin-top: 0;
+      color: #FFD700;
+    }
+    .exhibit-info p {
+      line-height: 1.5;
+    }
+    .interact-prompt {
+      position: absolute;
+      bottom: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 10px;
+      border-radius: 5px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="title">MINECRAFT MUSEUM EXPERIENCE</div>
+  <div class="controls">WASD to move, Mouse to look around, SPACE to interact with exhibits</div>
+  <div class="interact-prompt" id="interactPrompt">Press SPACE to view exhibit information</div>
+  <div class="exhibit-info" id="exhibitInfo"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    // Initialize Three.js scene
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87CEEB); // Sky blue background
+    
+    // Camera setup - true first person with proper Euler order
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.rotation.order = "YXZ"; // This prevents gimbal lock issues
+    
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+    
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(50, 200, 100);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 1024;
+    directionalLight.shadow.mapSize.height = 1024;
+    scene.add(directionalLight);
+    
+    // Materials
+    const createTexture = (color, size = 64) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const context = canvas.getContext('2d');
+      
+      // Fill main color
+      context.fillStyle = color;
+      context.fillRect(0, 0, size, size);
+      
+      // Add darker border for pixelated look
+      context.strokeStyle = darkenColor(color, 20);
+      context.lineWidth = 4;
+      context.strokeRect(0, 0, size, size);
+      
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.magFilter = THREE.NearestFilter;
+      texture.minFilter = THREE.NearestFilter;
+      return texture;
+    };
+    
+    // Create image texture for exhibits
+    const createImageTexture = (imageNumber) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const context = canvas.getContext('2d');
+      
+      // Background color
+      context.fillStyle = '#F5F5DC'; // Beige background
+      context.fillRect(0, 0, 256, 256);
+      
+      // Border
+      context.strokeStyle = '#8B4513'; // Brown frame
+      context.lineWidth = 16;
+      context.strokeRect(0, 0, 256, 256);
+      
+      // Draw placeholder content based on image number
+      context.fillStyle = '#000000';
+      context.font = '20px Courier New';
+      context.textAlign = 'center';
+      
+      // Different content for each image
+      if (imageNumber === 1) {
+        context.fillStyle = '#7CBA3D'; // Grass green
+        context.fillRect(48, 48, 160, 80);
+        context.fillStyle = '#8B4513'; // Dirt brown
+        context.fillRect(48, 128, 160, 80);
+        context.fillStyle = '#000000';
+        context.fillText('MINECRAFT TERRAIN', 128, 228);
+      } else if (imageNumber === 2) {
+        context.fillStyle = '#A0522D'; // Wood
+        context.fillRect(98, 48, 60, 120);
+        context.fillStyle = '#7CBA3D'; // Leaves
+        context.fillRect(48, 48, 160, 40);
+        context.fillStyle = '#000000';
+        context.fillText('MINECRAFT TREES', 128, 228);
+      } else if (imageNumber === 3) {
+        // Draw a pickaxe
+        context.fillStyle = '#A0522D'; // Wood handle
+        context.fillRect(113, 88, 30, 100);
+        context.fillStyle = '#B9F2FF'; // Diamond head
+        context.beginPath();
+        context.moveTo(128, 48);
+        context.lineTo(178, 88);
+        context.lineTo(148, 88);
+        context.lineTo(128, 68);
+        context.lineTo(108, 88);
+        context.lineTo(78, 88);
+        context.closePath();
+        context.fill();
+        context.fillStyle = '#000000';
+        context.fillText('MINECRAFT TOOLS', 128, 228);
+      } else if (imageNumber === 4) {
+        // Draw a creeper face
+        context.fillStyle = '#5D8A57'; // Creeper green
+        context.fillRect(68, 48, 120, 120);
+        context.fillStyle = '#000000';
+        context.fillRect(88, 78, 20, 20); // Eyes
+        context.fillRect(148, 78, 20, 20);
+        context.fillRect(88, 108, 20, 20); // Mouth
+        context.fillRect(108, 108, 20, 20);
+        context.fillRect(128, 108, 20, 20);
+        context.fillRect(148, 108, 20, 20);
+        context.fillText('MINECRAFT MOBS', 128, 228);
+      } else {
+        // Default minecraft logo
+        context.fillStyle = '#7D7D7D';
+        context.fillRect(48, 78, 160, 100);
+        context.fillStyle = '#000000';
+        context.fillText('MINECRAFT HISTORY', 128, 228);
+      }
+      
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.magFilter = THREE.NearestFilter;
+      texture.minFilter = THREE.NearestFilter;
+      return texture;
+    };
+    
+    function darkenColor(color, percent) {
+      const num = parseInt(color.replace('#', ''), 16);
+      const amt = Math.round(2.55 * percent);
+      const R = (num >> 16) - amt;
+      const G = (num >> 8 & 0x00FF) - amt;
+      const B = (num & 0x0000FF) - amt;
+      return '#' + (
+        0x1000000 + 
+        (R < 0 ? 0 : R) * 0x10000 + 
+        (G < 0 ? 0 : G) * 0x100 + 
+        (B < 0 ? 0 : B)
+      ).toString(16).slice(1);
+    }
+    
+    const materials = {
+      grass: new THREE.MeshLambertMaterial({ map: createTexture('#7CBA3D') }),
+      dirt: new THREE.MeshLambertMaterial({ map: createTexture('#8B4513') }),
+      wood: new THREE.MeshLambertMaterial({ map: createTexture('#A0522D') }),
+      cobblestone: new THREE.MeshLambertMaterial({ map: createTexture('#949494') }),
+      brick: new THREE.MeshLambertMaterial({ map: createTexture('#BD5E35') }),
+      oakPlanks: new THREE.MeshLambertMaterial({ map: createTexture('#C8A165') }),
+      glass: new THREE.MeshLambertMaterial({ 
+        map: createTexture('#ADDFEE'),
+        transparent: true,
+        opacity: 0.6
+      }),
+      roof: new THREE.MeshLambertMaterial({ map: createTexture('#713A16') }),
+      quartz: new THREE.MeshLambertMaterial({ map: createTexture('#E8E6E1') }),
+      gold: new THREE.MeshLambertMaterial({ map: createTexture('#FFD700') }),
+      diamond: new THREE.MeshLambertMaterial({ map: createTexture('#B9F2FF') }),
+      obsidian: new THREE.MeshLambertMaterial({ map: createTexture('#1D1135') }),
+      redstone: new THREE.MeshLambertMaterial({ map: createTexture('#FF0000') }),
+      sign: new THREE.MeshLambertMaterial({ map: createTexture('#8B5A2B') }),
+      frame: new THREE.MeshLambertMaterial({ map: createTexture('#8B5A2B', 128) }),
+      // Image textures
+      image1: new THREE.MeshLambertMaterial({ map: createImageTexture(1) }),
+      image2: new THREE.MeshLambertMaterial({ map: createImageTexture(2) }),
+      image3: new THREE.MeshLambertMaterial({ map: createImageTexture(3) }),
+      image4: new THREE.MeshLambertMaterial({ map: createImageTexture(4) }),
+      image5: new THREE.MeshLambertMaterial({ map: createImageTexture(5) })
+    };
+    
+    // Collision system
+    const colliders = [];
+    const playerRadius = 0.5;
+    
+    // Interactable objects
+    const interactables = [];
+    
+    // Helper function to create a cube
+    function createCube(width, height, depth, material, x, y, z, addCollider = true) {
+      const geometry = new THREE.BoxGeometry(width, height, depth);
+      const cube = new THREE.Mesh(geometry, material);
+      cube.position.set(x, y, z);
+      cube.castShadow = true;
+      cube.receiveShadow = true;
+      scene.add(cube);
+      
+      if (addCollider) {
+        colliders.push({
+          minX: x - width/2,
+          maxX: x + width/2,
+          minY: y - height/2,
+          maxY: y + height/2,
+          minZ: z - depth/2,
+          maxZ: z + depth/2
+        });
+      }
+      
+      return cube;
+    }
+    
+    // Helper function to create framed images
+    function createFramedImage(imageMaterial, x, y, z, rotation, title, description) {
+      const frameWidth = 2.2;
+      const frameHeight = 2.2;
+      const frameDepth = 0.1;
+      const imageWidth = 2;
+      const imageHeight = 2;
+      
+      // Create frame
+      const frame = createCube(frameWidth, frameHeight, frameDepth, materials.frame, x, y, z, false);
+      frame.rotation.y = rotation;
+      
+      // Create image
+      const image = createCube(imageWidth, imageHeight, 0.05, imageMaterial, 
+                               x - Math.sin(rotation) * 0.05, 
+                               y, 
+                               z - Math.cos(rotation) * 0.05, 
+                               false);
+      image.rotation.y = rotation;
+      
+      // Add to interactables
+      interactables.push({
+        object: image,
+        title: title,
+        description: description,
+        type: 'image'
+      });
+      
+      return { frame, image };
+    }
+    
+    // Create floor
+    const groundSize = 80;
+    createCube(groundSize, 1, groundSize, materials.quartz, 0, -0.5, 0, true);
+    
+    // Museum Main Building
+    
+    const museumWidth = 60;
+    const museumDepth = 40;
+    const wallHeight = 8;
+    
+    // Create outer walls
+    createCube(museumWidth, wallHeight, 1, materials.quartz, 0, wallHeight/2, -museumDepth/2); // Front wall
+    createCube(museumWidth, wallHeight, 1, materials.quartz, 0, wallHeight/2, museumDepth/2); // Back wall
+    createCube(1, wallHeight, museumDepth, materials.quartz, -museumWidth/2, wallHeight/2, 0); // Left wall
+    createCube(1, wallHeight, museumDepth, materials.quartz, museumWidth/2, wallHeight/2, 0); // Right wall
+    
+    // Museum entrance
+    createCube(8, wallHeight, 1, materials.quartz, -museumWidth/2 + 15, wallHeight/2, -museumDepth/2); // Front wall left
+    createCube(8, wallHeight, 1, materials.quartz, museumWidth/2 - 15, wallHeight/2, -museumDepth/2); // Front wall right
+    // Entrance door - open space with no collider
+    
+    // Roof
+    createCube(museumWidth + 2, 1, museumDepth + 2, materials.quartz, 0, wallHeight, 0, true);
+    
+    // Create inner walls to divide exhibits
+    createCube(1, wallHeight, museumDepth/2 - 5, materials.quartz, -museumWidth/4, wallHeight/2, -museumDepth/4); // Inner wall 1
+    createCube(1, wallHeight, museumDepth/2 - 5, materials.quartz, museumWidth/4, wallHeight/2, -museumDepth/4); // Inner wall 2
+    createCube(museumWidth/2 - 5, wallHeight, 1, materials.quartz, -museumWidth/4, wallHeight/2, museumDepth/4); // Inner wall 3
+    createCube(museumWidth/2 - 5, wallHeight, 1, materials.quartz, museumWidth/4, wallHeight/2, museumDepth/4); // Inner wall 4
+    
+    // --- EXHIBITS ---
+    
+    // Add framed images around the museum
+    createFramedImage(materials.image1, -museumWidth/2 + 0.55, 3, -museumDepth/4, 0, 
+                     "Minecraft Terrain Evolution", 
+                     "Minecraft's terrain generation has evolved dramatically since its 2009 inception. The iconic blocky landscape began as simple noise functions creating plains and hills, later expanding to include diverse biomes ranging from deserts and jungles to ocean monuments and nether fortresses. The 2021 Caves & Cliffs update revolutionized underground exploration with massive cave systems and archaeological sites, while the upcoming Wilderness Update promises even more natural diversity including cherry blossom forests.");
+    
+    createFramedImage(materials.image2, -museumWidth/4 + 0.55, 3, -museumDepth/2 + 0.55, Math.PI/2, 
+                     "The Flora of Minecraft", 
+                     "Minecraft's plant life has grown from simple oak trees and flowers in early versions to a diverse ecosystem. Today's Minecraft features six tree varieties (oak, spruce, birch, jungle, acacia, and dark oak), each with unique wood types and appearances. Crops evolved from basic wheat to include potatoes, carrots, beetroot, and more exotic options like chorus fruit from The End. Decorative plants now include numerous flower varieties, vines, lily pads, and the glowing shroomlight from the Nether, allowing players to create lush, vibrant landscapes.");
+    
+    createFramedImage(materials.image3, museumWidth/4 - 0.55, 3, -museumDepth/2 + 0.55, -Math.PI/2, 
+                     "Tools of the Trade", 
+                     "Minecraft's progression system revolves around tools crafted from increasingly valuable materials. Players begin with wooden tools, advancing through stone, iron, gold, and finally diamond - with Netherite being the ultimate upgrade introduced in the Nether Update. Each tier offers improved durability and efficiency. The introduction of enchanting in 2011 revolutionized tool usage, allowing players to add special properties like Fortune for increased drops, Efficiency for faster mining, or Mending for self-repair. The archeology tools added in 2023 expanded the toolset beyond the traditional pickaxe, axe, shovel, hoe, and sword combination.");
+    
+    createFramedImage(materials.image4, museumWidth/2 - 0.55, 3, -museumDepth/4, Math.PI, 
+                     "Iconic Minecraft Mobs", 
+                     "The Creeper, Minecraft's most recognizable hostile mob, was created accidentally when Notch misplaced some code while creating the pig model. This happy accident became the game's mascot and most feared enemy, with its silent approach and explosive nature. Other iconic mobs include Zombies, Skeletons, and Endermen - the mysterious teleporting creatures that connect to the End dimension. Friendly mobs like Villagers have evolved from simple NPCs to complex traders with professions, homes, and social behaviors. The Warden, added in the Wild Update, represented a new direction for mob design with its sound-based hunting mechanics.");
+    
+    createFramedImage(materials.image5, -museumWidth/4, 3, museumDepth/2 - 0.55, -Math.PI, 
+                     "The History of Minecraft", 
+                     "Created by Markus 'Notch' Persson, Minecraft began development on May 10, 2009. Initially called 'Cave Game,' it was renamed Minecraft: Order of the Stone before settling on simply 'Minecraft.' The game launched in alpha in 2010, entered beta in 2011, and saw its full release in November 2011. Microsoft acquired Mojang and Minecraft for $2.5 billion in 2014, continuing to develop the game across all platforms. Having sold over 300 million copies, Minecraft is the best-selling video game of all time, with a thriving community of builders, modders, and players spanning over 15 years of continuous development and expansion.");
+    
+    // Exhibit 1: Minecraft House
+    const house1X = -museumWidth/4 - 5;
+    const house1Z = -museumDepth/4 - 5;
+    createHouse(house1X, 0, house1Z);
+    createExhibitSign(house1X + 4, 0.5, house1Z - 3, "Traditional Minecraft House", "The classic design featuring wooden planks and cobblestone. First appeared in Alpha version 1.0.0");
+    
+    // Exhibit 2: Modern House
+    const house2X = museumWidth/4 + 5;
+    const house2Z = -museumDepth/4 - 5;
+    createModernHouse(house2X, 0, house2Z);
+    createExhibitSign(house2X + 4, 0.5, house2Z - 3, "Modern Minecraft Architecture", "Sleek design using concrete, glass, and quartz. Popularized by builders around 2016.");
+    
+    // Exhibit 3: Mining Display
+    const miningX = -museumWidth/4 - 5;
+    const miningZ = museumDepth/4 + 5;
+    createMiningExhibit(miningX, 0, miningZ);
+    createExhibitSign(miningX + 4, 0.5, miningZ + 3, "Mining Evolution", "From wooden pickaxes to enchanted diamond tools, mining has been central to gameplay since 2009.");
+    
+    // Exhibit 4: Redstone Contraption
+    const redstoneX = museumWidth/4 + 5;
+    const redstoneZ = museumDepth/4 + 5;
+    createRedstoneExhibit(redstoneX, 0, redstoneZ);
+    createExhibitSign(redstoneX + 4, 0.5, redstoneZ + 3, "Redstone Engineering", "The revolutionary circuit system that turned Minecraft into a virtual computer builder.");
+    
+    // Function to create a classic Minecraft house (Exhibit 1)
+    function createHouse(x, y, z) {
+      const houseWidth = 6;
+      const houseDepth = 5;
+      const floorHeight = 3;
+      
+      // Floor
+      createCube(houseWidth, 0.5, houseDepth, materials.oakPlanks, x, y + 0.25, z);
+      
+      // Walls
+      createCube(houseWidth, floorHeight, 0.5, materials.brick, x, y + floorHeight/2, z - houseDepth/2 + 0.25); // Front wall
+      createCube(houseWidth, floorHeight, 0.5, materials.brick, x, y + floorHeight/2, z + houseDepth/2 - 0.25); // Back wall
+      createCube(0.5, floorHeight, houseDepth - 1, materials.brick, x - houseWidth/2 + 0.25, y + floorHeight/2, z); // Left wall
+      createCube(0.5, floorHeight, houseDepth - 1, materials.brick, x + houseWidth/2 - 0.25, y + floorHeight/2, z); // Right wall
+      
+      // Door
+      createCube(1, 2, 0.1, materials.wood, x, y + 1, z - houseDepth/2 + 0.1);
+      
+      // Windows
+      createCube(1, 1, 0.1, materials.glass, x - 2, y + 1.5, z - houseDepth/2 + 0.1); // Front left window
+      createCube(1, 1, 0.1, materials.glass, x + 2, y + 1.5, z - houseDepth/2 + 0.1); // Front right window
+      
+      // Roof
+      for (let i = 0; i <= houseWidth + 1; i++) {
+        createCube(1, 0.5, houseDepth + 1, materials.wood, x - houseWidth/2 + i - 0.5, y + floorHeight + i * 0.5, z);
+      }
+    }
+    
+    // Function to create a modern Minecraft house (Exhibit 2)
+    function createModernHouse(x, y, z) {
+      const houseWidth = 6;
+      const houseDepth = 5;
+      const floorHeight = 3;
+      
+      // Floor
+      createCube(houseWidth, 0.5, houseDepth, materials.quartz, x, y + 0.25, z);
+      
+      // Walls
+      createCube(houseWidth, floorHeight, 0.5, materials.quartz, x, y + floorHeight/2, z - houseDepth/2 + 0.25); // Front wall
+      createCube(houseWidth, floorHeight, 0.5, materials.quartz, x, y + floorHeight/2, z + houseDepth/2 - 0.25); // Back wall
+      createCube(0.5, floorHeight, houseDepth, materials.quartz, x - houseWidth/2 + 0.25, y + floorHeight/2, z); // Left wall
+      createCube(0.5, floorHeight, houseDepth, materials.quartz, x + houseWidth/2 - 0.25, y + floorHeight/2, z); // Right wall
+      
+      // Large windows
+      createCube(4, 2, 0.1, materials.glass, x, y + 1.5, z - houseDepth/2 + 0.1); // Front window
+      
+      // Flat roof
+      createCube(houseWidth + 1, 0.5, houseDepth + 1, materials.quartz, x, y + floorHeight + 0.25, z);
+      
+      // Decorative elements
+      createCube(0.5, 4, 0.5, materials.obsidian, x - houseWidth/2 - 0.5, y + 2, z - houseDepth/2 - 0.5);
+      createCube(0.5, 4, 0.5, materials.obsidian, x + houseWidth/2 + 0.5, y + 2, z - houseDepth/2 - 0.5);
+    }
+    
+    // Function to create a mining exhibit (Exhibit 3)
+    function createMiningExhibit(x, y, z) {
+      // Create a small mining scene
+      createCube(6, 0.5, 5, materials.dirt, x, y + 0.25, z);
+      
+      // Stone blocks
+      createCube(1, 1, 1, materials.cobblestone, x - 2, y + 0.5, z - 1);
+      createCube(1, 1, 1, materials.cobblestone, x - 1, y + 0.5, z - 1);
+      createCube(1, 1, 1, materials.cobblestone, x, y + 0.5, z - 1);
+      createCube(1, 1, 1, materials.cobblestone, x + 1, y + 0.5, z - 1);
+      
+      // Ores
+      createCube(1, 1, 1, materials.gold, x - 2, y + 0.5, z);
+      createCube(1, 1, 1, materials.diamond, x, y + 0.5, z);
+      createCube(1, 1, 1, materials.redstone, x + 2, y + 0.5, z);
+      
+      // Tools display
+      createCube(0.2, 1, 0.2, materials.wood, x - 2, y + 1.5, z + 1); // Wooden handle
+      createCube(0.4, 0.4, 0.1, materials.cobblestone, x - 2, y + 2, z + 1); // Stone pickaxe head
+      
+      createCube(0.2, 1, 0.2, materials.wood, x, y + 1.5, z + 1); // Wooden handle
+      createCube(0.4, 0.4, 0.1, materials.gold, x, y + 2, z + 1); // Gold pickaxe head
+      
+      createCube(0.2, 1, 0.2, materials.wood, x + 2, y + 1.5, z + 1); // Wooden handle
+      createCube(0.4, 0.4, 0.1, materials.diamond, x + 2, y + 2, z + 1); // Diamond pickaxe head
+    }
+    
+    // Function to create a redstone exhibit (Exhibit 4)
+    function createRedstoneExhibit(x, y, z) {
+      // Base platform
+      createCube(6, 0.5, 5, materials.cobblestone, x, y + 0.25, z);
+      
+      // Redstone wire (red blocks on floor)
+      createCube(1, 0.1, 1, materials.redstone, x - 2, y + 0.55, z - 1);
+      createCube(1, 0.1, 1, materials.redstone, x - 1, y + 0.55, z - 1);
+      createCube(1, 0.1, 1, materials.redstone, x, y + 0.55, z - 1);
+      createCube(1, 0.1, 1, materials.redstone, x + 1, y + 0.55, z - 1);
+      createCube(1, 0.1, 1, materials.redstone, x + 2, y + 0.55, z - 1);
+      
+      // Redstone torch
+      createCube(0.2, 0.5, 0.2, materials.wood, x - 2, y + 0.85, z);
+      createCube(0.3, 0.3, 0.3, materials.redstone, x - 2, y + 1.25, z);
+      
+      // Redstone repeater
+      createCube(1, 0.2, 0.5, materials.cobblestone, x, y + 0.6, z);
+      createCube(0.2, 0.1, 0.3, materials.redstone, x, y + 0.7, z);
+      
+      // Redstone lamp
+      createCube(1, 1, 1, materials.gold, x + 2, y + 1, z);
+      
+      // Piston
+      createCube(1, 1, 1, materials.wood, x, y + 1, z + 1);
+      createCube(0.8, 0.8, 0.2, materials.cobblestone, x, y + 1, z + 1.5);
+    }
+    
+    // Function to create exhibit signs
+    function createExhibitSign(x, y, z, title, description) {
+      const signWidth = 3;
+      const signHeight = 1;
+      
+      const sign = createCube(signWidth, signHeight, 0.2, materials.sign, x, y + signHeight/2, z, true);
+      
+      // Add to interactables
+      interactables.push({
+        object: sign,
+        title: title,
+        description: description,
+        type: 'sign'
+      });
+    }
+    
+    // First person controls
+    let moveForward = false;
+    let moveBackward = false;
+    let moveLeft = false;
+    let moveRight = false;
+    let canJump = false;
+    
+    const velocity = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+    
+    // Player object and camera
+    const player = new THREE.Object3D();
+    player.position.set(0, 1.7, museumDepth/2 - 5);
+
+    player.add(camera);
+    scene.add(player);
+    
+    // Mouse controls for looking around
+   // Mouse controls for looking around
+// 360-degree mouse controls
+// 360-degree rotation controls
+let mouseX = 0;
+let mouseY = 0;
+let targetMouseX = 0;
+let targetMouseY = 0;
+const mouseSensitivity = 0.002;
+const rotationSpeed = 0.1;
+
+document.addEventListener('mousemove', (event) => {
+    targetMouseX = event.movementX || 0;
+    targetMouseY = event.movementY || 0;
+});
+    
+    // Hide cursor and lock pointer when clicking on the canvas
+    renderer.domElement.addEventListener('click', () => {
+    renderer.domElement.requestPointerLock();
+    // Reset mouse values when locking
+    mouseX = 0;
+    mouseY = 0;
+    targetMouseX = 0;
+    targetMouseY = 0;
+});
+    // Handle key presses for movement
+    document.addEventListener('keydown', (event) => {
+      switch (event.code) {
+        case 'KeyW':
+          moveForward = true;
+          break;
+        case 'KeyS':
+          moveBackward = true;
+          break;
+        case 'KeyA':
+          moveLeft = true;
+          break;
+        case 'KeyD':
+          moveRight = true;
+          break;
+        case 'Space':
+          if (canInteract && closestInteractable) {
+            showExhibitInfo(closestInteractable);
+          }
+          break;
+      }
+    });
+    
+    document.addEventListener('keyup', (event) => {
+      switch (event.code) {
+        case 'KeyW':
+          moveForward = false;
+          break;
+        case 'KeyS':
+          moveBackward = false;
+          break;
+        case 'KeyA':
+          moveLeft = false;
+          break;
+        case 'KeyD':
+          moveRight = false;
+          break;
+      }
+    });
+    
+    // Clock for timing
+    const clock = new THREE.Clock();
+    
+    // Check if position collides with any colliders
+    function checkCollision(position) {
+      for (const collider of colliders) {
+        if (position.x > collider.minX - playerRadius && 
+            position.x < collider.maxX + playerRadius &&
+            position.y > collider.minY && 
+            position.y < collider.maxY &&
+            position.z > collider.minZ - playerRadius && 
+            position.z < collider.maxZ + playerRadius) {
+          return true;
+        }
+      }
+      return false;
+    }
+    
+    // Display exhibit information
+    function showExhibitInfo(interactable) {
+      exhibitInfo.innerHTML = `
+        <h2>${interactable.title}</h2>
+        <p>${interactable.description}</p>
+        <p><em>Press ESC to close</em></p>
+      `;
+      exhibitInfo.style.display = 'block';
+      
+      document.addEventListener('keydown', closeExhibitInfo);
+    }
+    
+    function closeExhibitInfo(event) {
+      if (event.code === 'Escape') {
+        exhibitInfo.style.display = 'none';
+        document.removeEventListener('keydown', closeExhibitInfo);
+      }
+    }
+    
+    // Check if the player is within range of an interactable object
+    function checkInteractions() {
+      let minDistance = 3; // Maximum interaction distance
+      closestInteractable = null;
+      
+      const playerPosition = player.position.clone();
+      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
+      
+      for (const interactable of interactables) {
+        const objectPosition = interactable.object.position.clone();
+        const distance = playerPosition.distanceTo(objectPosition);
+        
+        if (distance < minDistance) {
+          // Check if player is facing the object
+          const directionToObject = objectPosition.sub(playerPosition).normalize();
+          const dotProduct = forward.dot(directionToObject);
+          
+          if (dotProduct > 0.5) { // Object is roughly in front of player
+            minDistance = distance;
+            closestInteractable = interactable;
+          }
+        }
+      }
+      
+      if (closestInteractable) {
+        interactPrompt.style.display = 'block';
+        canInteract = true;
+      } else {
+        interactPrompt.style.display = 'none';
+        canInteract = false;
+      }
+    }
+    
+    // Animation loop
+    function animate() {
+    requestAnimationFrame(animate);
+    
+    const delta = clock.getDelta();
+    
+    // Smooth mouse movement for 360 rotation
+    mouseX += (targetMouseX * mouseSensitivity - mouseX) * rotationSpeed;
+    mouseY += (targetMouseY * mouseSensitivity - mouseY) * rotationSpeed;
+    
+    // Apply rotation - full 360 degrees horizontally
+    player.rotation.y -= mouseX;
+    
+    // Vertical rotation with limits (-90 to +90 degrees)
+    camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x - mouseY));
+    
+    // Reset mouse movement
+    targetMouseX = 0;
+    targetMouseY = 0;
+
+    // Handle movement (keep existing code)
+    velocity.x = 0;
+    velocity.z = 0;
+    
+    direction.z = Number(moveForward) - Number(moveBackward);
+    direction.x = Number(moveLeft) - Number(moveRight);
+    direction.normalize();
+    
+    const moveSpeed = 5.0;
+    
+    if (moveForward || moveBackward) velocity.z -= direction.z * moveSpeed * delta;
+    if (moveLeft || moveRight) velocity.x -= direction.x * moveSpeed * delta;
+    
+    // Movement relative to camera orientation
+    if (velocity.x !== 0 || velocity.z !== 0) {
+        const matrix = new THREE.Matrix4();
+        matrix.makeRotationY(player.rotation.y);
+        velocity.applyMatrix4(matrix);
+        
+        // Collision detection
+        const newPosition = player.position.clone();
+        newPosition.x += velocity.x;
+        newPosition.z += velocity.z;
+        
+        // Try moving on X axis
+        const xPosition = player.position.clone();
+        xPosition.x += velocity.x;
+        if (!checkCollision(xPosition)) {
+            player.position.x += velocity.x;
+        }
+        
+        // Try moving on Z axis
+        const zPosition = player.position.clone();
+        zPosition.z += velocity.z;
+        if (!checkCollision(zPosition)) {
+            player.position.z += velocity.z;
+        }
+    }
+    
+    // Check for interactions
+    checkInteractions();
+    
+    renderer.render(scene, camera);
+}
+    
+    // Start the animation loop
+    animate();
+    
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

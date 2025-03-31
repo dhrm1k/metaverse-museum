@@ -101,7 +101,7 @@ const PAINTINGS = [
         height: 8,
         position: { x: 0, y: 8, z: -49.3 },
         rotation: 0,
-        title: "falling bird"
+        title: "Falling bird"
     },
     {
         url: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg/1280px-Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg",
@@ -109,7 +109,7 @@ const PAINTINGS = [
         height: 8,
         position: { x: 25, y: 8, z: -49.3 },
         rotation: 0,
-        title: "Creation of Adam"
+        title: "The Creation of Adam"
     },
 
     // South Wall (Back wall) paintings
@@ -127,7 +127,7 @@ const PAINTINGS = [
         height: 9,
         position: { x: -35, y: 8, z: 49.3 },
         rotation: Math.PI,
-        title: "Untitled (Figure on Rickshaw)"
+        title: "Figure on Rickshaw"
     },
     {
         url: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Meisje_met_de_parel.jpg/800px-Meisje_met_de_parel.jpg",
@@ -135,7 +135,7 @@ const PAINTINGS = [
         height: 9,
         position: { x: -10, y: 8, z: 49.3 },
         rotation: Math.PI,
-        title: "Girl with Pearl Earring"
+        title: "Girl with a Pearl Earring"
     },
 
     // East Wall (Right wall) paintings
@@ -187,7 +187,7 @@ const PAINTINGS = [
         height: 10,
         position: { x: -60, y: 8, z: 49.3 },
         rotation: Math.PI,
-        title: "Departure 2"
+        title: "Van Gogh Self Portrait"
     }
 ];
 
@@ -286,7 +286,7 @@ const PAINTING_DETAILS = {
         technique: "Oil, tempera, and pastel on cardboard",
         location: "National Gallery, Oslo"
     },
-    "falling bird": {
+    "Falling bird": {
         artist: "Tyeb Mehta",
         year: "1988",
         description: "A masterpiece by one of India's most significant modern artists, Tyeb Mehta. The painting depicts his iconic 'falling figure' motif, rendered in his distinctive style of flat colors and sharp lines. The work represents both movement and tension, characteristic of Mehta's exploration of human condition and violence.",
@@ -305,12 +305,11 @@ const PAINTING_DETAILS = {
     "Figure on Rickshaw": {
         artist: "Tyeb Mehta",
         year: "1984",
-        description: "A powerful modernist work depicting a figure on a rickshaw, characteristic of Mehta's distinctive style. The painting uses bold colors and geometric forms to convey movement and tension. This piece is part of his famous rickshaw series that explores urban life and human condition in modern India.",
+        description: "This powerful painting is part of Tyeb Mehta's iconic Rickshaw Puller series, depicting a figure merged with a rickshaw in his distinctive minimalist style. The work captures the struggle and dignity of urban labor, showing a human figure geometrically fragmented and integrated with the rickshaw, symbolizing the dehumanizing aspects of poverty and labor. The stark color planes and diagonal compositions create a sense of tension and movement, while the distorted human form reflects the physical and emotional burden of the rickshaw puller's existence. This painting represents Mehta's recurring theme of human suffering and resilience in modern India.",
         technique: "Oil on canvas",
         location: "Private Collection",
-        significance: "Part of Mehta's iconic Rickshaw series, this painting represents his exploration of human struggle and dignity. The diagonal composition and fragmented forms are signature elements of his modernist style.",
-        style: "Indian Modernism",
-        additionalInfo: "Tyeb Mehta's rickshaw series is considered one of the most significant contributions to Indian modern art, reflecting both social commentary and formal innovation in painting."
+        style: "Modern Indian Art, Minimalist Expressionism",
+        significance: "Part of Mehta's significant Rickshaw series that emerged from his experiences in Kolkata, representing his artistic response to urban poverty and human condition"
     },
     "The Last Supper": {
         artist: "Leonardo da Vinci",
@@ -359,6 +358,25 @@ const PAINTING_DETAILS = {
         dimensions: "Large format",
         colorPalette: "Rich earth tones with dramatic contrasts between light and dark",
         historicalContext: "Created during a period when Khanna was deeply engaged with themes of human displacement and migration, drawing parallels between historical events and contemporary social movements."
+    },
+    "Girl with a Pearl Earring": {
+        artist: "Johannes Vermeer",
+        year: "1665",
+        description: "Often called the 'Mona Lisa of the North', this masterpiece depicts a young woman in exotic dress, looking over her shoulder with an enigmatic expression. The painting is renowned for its intimate portrayal and the luminous quality of light, particularly in the girl's gaze and the lustrous pearl earring. The subject's identity remains unknown, adding to the painting's mystery. The exotic turban and the dramatic use of light against a dark background creates a timeless and mesmerizing effect that has captivated viewers for centuries.",
+        technique: "Oil on canvas",
+        location: "Mauritshuis, The Hague, Netherlands",
+        style: "Dutch Golden Age, Baroque",
+        dimensions: "44.5 cm × 39 cm"
+    },
+    "Departure": {
+        artist: "Krishen Khanna",
+        year: "2008",
+        description: "Departure is a powerful composition that captures the essence of human movement and transition. The painting depicts a group of figures in motion, rendered in Khanna's distinctive style that combines gestural brushwork with emotional depth. The work shows people in various states of movement, their forms intertwined and overlapping, creating a sense of collective journey. The muted color palette, dominated by earthy tones and dramatic contrasts, adds to the painting's emotional resonance. This piece reflects Khanna's recurring theme of human displacement and migration, drawing from his personal experiences of Partition and his observations of urban life in India.",
+        technique: "Oil on canvas",
+        location: "DAG Modern Art Gallery",
+        style: "Contemporary Indian Art, Modernism",
+        significance: "The painting is part of Khanna's broader exploration of human movement and displacement in modern India. It represents his mature style where figurative elements merge with abstract expressionist techniques.",
+        additionalInfo: "Krishen Khanna, born in 1925, is one of India's most significant modernist painters. His work often deals with themes of migration, daily life, and human relationships, influenced by his experiences during the Partition of India and his observations of urban life."
     }
 };
 
@@ -1256,7 +1274,7 @@ function updateProximityIndicator(painting) {
                 color: white; padding: 15px; border-radius: 10px; font-family: Arial;
                 border: 1px solid #ffd700;">
                 <div style="font-size: 18px; margin-bottom: 5px;">${painting.title}</div>
-                <div style="font-size: 14px; color: #ffd700;">Press SPACE to view details</div>
+                <div style="font-size: 14px; color: #ffd700; width: 200px;">Press SPACE to view details</div>
             </div>`;
         
         if (!indicator) {

@@ -122,12 +122,12 @@ const PAINTINGS = [
         title: "Van Gogh Self Portrait"
     },
     {
-        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Claude_Monet_-_Water_Lilies_-_Google_Art_Project.jpg/1280px-Claude_Monet_-_Water_Lilies_-_Google_Art_Project.jpg",
-        width: 12,
-        height: 8,
+        url: "https://th.bing.com/th/id/OIP.JSP9UhEpZwtqZDjriCBGigHaJP?rs=1&pid=ImgDetMain",
+        width: 7,
+        height: 9,
         position: { x: -35, y: 8, z: 49.3 },
         rotation: Math.PI,
-        title: "Water Lilies"
+        title: "Untitled (Figure on Rickshaw)"
     },
     {
         url: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Meisje_met_de_parel.jpg/800px-Meisje_met_de_parel.jpg",
@@ -180,6 +180,14 @@ const PAINTINGS = [
         position: { x: -10, y: 8, z: 49.3 },
         rotation: Math.PI,
         title: "Meditation"
+    },
+    {
+        url: "https://dza2a2ql7zktf.cloudfront.net/binaries-cdn/dqzqcuqf9/image/fetch/q_auto,w_500/https://d2u3kfwd92fzu7.cloudfront.net/catalog/artwork/gallery/1380/Departure_2_DSC8608_copy-2.jpg",
+        width: 8,
+        height: 10,
+        position: { x: -60, y: 8, z: 49.3 },
+        rotation: Math.PI,
+        title: "Departure 2"
     }
 ];
 
@@ -294,12 +302,15 @@ const PAINTING_DETAILS = {
         technique: "Fresco",
         location: "Sistine Chapel, Vatican City"
     },
-    "Water Lilies": {
-        artist: "Claude Monet",
-        year: "1919",
-        description: "Part of Monet's Water Lilies series, this painting captures the artist's flower garden at Giverny. The series represents Monet's exploration of light, reflection, and natural beauty.",
+    "Figure on Rickshaw": {
+        artist: "Tyeb Mehta",
+        year: "1984",
+        description: "A powerful modernist work depicting a figure on a rickshaw, characteristic of Mehta's distinctive style. The painting uses bold colors and geometric forms to convey movement and tension. This piece is part of his famous rickshaw series that explores urban life and human condition in modern India.",
         technique: "Oil on canvas",
-        location: "Musée de l'Orangerie, Paris"
+        location: "Private Collection",
+        significance: "Part of Mehta's iconic Rickshaw series, this painting represents his exploration of human struggle and dignity. The diagonal composition and fragmented forms are signature elements of his modernist style.",
+        style: "Indian Modernism",
+        additionalInfo: "Tyeb Mehta's rickshaw series is considered one of the most significant contributions to Indian modern art, reflecting both social commentary and formal innovation in painting."
     },
     "The Last Supper": {
         artist: "Leonardo da Vinci",
@@ -336,6 +347,18 @@ const PAINTING_DETAILS = {
         technique: "Acrylic on Canvas",
         location: "Indian Art Zone Gallery",
         size: "30 x 30 inches"
+    },
+    "Departure 2": {
+        artist: "Krishen Khanna",
+        year: "2008",
+        description: "A striking composition from Khanna's iconic 'Departure' series, this painting captures the essence of human migration and movement. The artwork depicts figures in transit, rendered in bold, gestural brushstrokes that create a sense of urgency and motion. The composition uses a dramatic interplay of light and shadow to convey the emotional weight of departure.",
+        technique: "Oil on canvas",
+        location: "DAG Modern Art Gallery",
+        significance: "Part of Krishen Khanna's seminal 'Departure' series, this work reflects on themes of exodus, displacement, and human journeys. The painting is particularly significant in the context of post-partition Indian art, drawing from Khanna's personal experiences and observations.",
+        style: "Contemporary Indian Modernism",
+        dimensions: "Large format",
+        colorPalette: "Rich earth tones with dramatic contrasts between light and dark",
+        historicalContext: "Created during a period when Khanna was deeply engaged with themes of human displacement and migration, drawing parallels between historical events and contemporary social movements."
     }
 };
 
@@ -1230,7 +1253,7 @@ function updateProximityIndicator(painting) {
         const indicatorHTML = `
             <div id="paintingIndicator" style="position: fixed; bottom: 20px; left: 50%; 
                 transform: translateX(-50%); background-color: rgba(0, 0, 0, 0.7); 
-                color: white; padding: 15px; border-radius: 10px; font-family: Arial;
+                color: white; padding: 15px; border-radius: 10px; font-family: Arial; width: 12rem;
                 border: 1px solid #ffd700;">
                 <div style="font-size: 18px; margin-bottom: 5px;">${painting.title}</div>
                 <div style="font-size: 14px; color: #ffd700;">Press SPACE to view details</div>

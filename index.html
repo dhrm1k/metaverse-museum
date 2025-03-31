@@ -1,19 +1,1275 @@
- <!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Art Gallery</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+        #instructions {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 15px;
+            font-family: Arial;
+            border-radius: 5px;
+        }
+    </style>
 </head>
 <body>
-    <ul>
-        <li><a href="firstfloor.html">first floor</a></li>
-        <li><a href="looks-like-museum.html">looks like museum</a></li>
-        <li><a href="minecraft.html">minecraft</a></li>
-        <li><a href="test.html">test</a></li>
-        <li><a href="objloader.html">Raycasting with the best and the best texturing. Barely works on a mac.</a></li>
-    </ul>
+    <div id="instructions">
+        Click to start<br>
+        WASD = Move<br>
+        Mouse = Look around
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+
+<script>
+let camera, scene, renderer, controls;
+let moveForward = false, moveBackward = false;
+let moveLeft = false, moveRight = false;
+let velocity = new THREE.Vector3();
+let direction = new THREE.Vector3();
+let prevTime = performance.now();
+
+// Room configuration with different spaces
+const ROOM_CONFIG = {
+    mainHall: {
+        width: 150,
+        height: 20,
+        depth: 100,
+        position: { x: 0, y: 0, z: 0 },
+        color: 0xf0f0f0
+    },
+    leftWing: {
+        width: 80,
+        height: 20,
+        depth: 60,
+        position: { x: -115, y: 0, z: 0 },
+        color: 0xf5f5f5
+    },
+    rightWing: {
+        width: 80,
+        height: 20,
+        depth: 60,
+        position: { x: 115, y: 0, z: 0 },
+        color: 0xf5f5f5
+    }
+};
+
+const MOVEMENT_SPEED = 300;  // Adjusted movement speed
+const WALL_SLIDE = true;     // Enable wall sliding
+
+const PAINTINGS = [
+    {
+        url: "vasant.jpeg",
+        width: 6,
+        height: 8,
+        position: { x: -60, y: 8, z: -49 },
+        rotation: 0,
+        title: "Kashmir"
+    },
+    {
+        url: "https://www.bing.com/images/search?view=detailV2&ccid=S13CzhqD&id=9279C3A62717D0B6FCD437F9EE08415B75D28FA6&thid=OIP.S13CzhqDflJ9NO2_xE5NxAHaKC&mediaurl=https%3A%2F%2Fwww.indiaart.com%2Fold-masters%2FVasant-Amberkar%2FPaintings-by-Vasant-Amberkar%2Fimages%2FKashmir1-Painting-by-Vasant-Amberkar.jpg&exph=550&expw=406&q=Vasant+Narkar%27s+art&simid=608032868939101577&FORM=IRPRST&ck=C2AA920F8DB4DAC41F1564E6BCF30EB6&selectedIndex=0&itb=0&cw=1250&ch=604&mode=overlay",
+        width: 6,
+        height: 8,
+        position: { x: -60, y: 8, z: -49.3 },
+        rotation: 0,
+        title: "Mona Lisa"
+    },
+    {
+        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/1280px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
+        width: 10,
+        height: 8,
+        position: { x: -40, y: 8, z: -49.3 },
+        rotation: 0,
+        title: "Starry Night"
+    },
+    {
+        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f4/The_Scream.jpg/800px-The_Scream.jpg",
+        width: 7,
+        height: 9,
+        position: { x: -20, y: 8, z: -49.3 },
+        rotation: 0,
+        title: "The Scream"
+    },
+    {
+        url: "fallingbird.jpeg",
+        width: 6,
+        height: 8,
+        position: { x: 0, y: 8, z: -49.3 },
+        rotation: 0,
+        title: "falling bird"
+    },
+    {
+        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg/1280px-Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg",
+        width: 12,
+        height: 8,
+        position: { x: 25, y: 8, z: -49.3 },
+        rotation: 0,
+        title: "Creation of Adam"
+    },
+
+    // South Wall (Back wall) paintings
+    {
+        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Vincent_van_Gogh_-_Self-Portrait_-_Google_Art_Project.jpg/1280px-Vincent_van_Gogh_-_Self-Portrait_-_Google_Art_Project.jpg",
+        width: 7,
+        height: 9,
+        position: { x: -60, y: 8, z: 49.3 },
+        rotation: Math.PI,
+        title: "Van Gogh Self Portrait"
+    },
+    {
+        url: "https://th.bing.com/th/id/OIP.JSP9UhEpZwtqZDjriCBGigHaJP?rs=1&pid=ImgDetMain",
+        width: 7,
+        height: 9,
+        position: { x: -35, y: 8, z: 49.3 },
+        rotation: Math.PI,
+        title: "Untitled (Figure on Rickshaw)"
+    },
+    {
+        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Meisje_met_de_parel.jpg/800px-Meisje_met_de_parel.jpg",
+        width: 7,
+        height: 9,
+        position: { x: -10, y: 8, z: 49.3 },
+        rotation: Math.PI,
+        title: "Girl with Pearl Earring"
+    },
+
+    // East Wall (Right wall) paintings
+    {
+        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/A_Sunday_on_La_Grande_Jatte%2C_Georges_Seurat%2C_1884.jpg/1280px-A_Sunday_on_La_Grande_Jatte%2C_Georges_Seurat%2C_1884.jpg",
+        width: 12,
+        height: 8,
+        position: { x: 74.3, y: 8, z: -30 },
+        rotation: -Math.PI/2,
+        title: "A Sunday Afternoon"
+    },
+    {
+        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Leonardo_da_Vinci%2C_The_Last_Supper_high_res.jpg/1280px-Leonardo_da_Vinci%2C_The_Last_Supper_high_res.jpg",
+        width: 12,
+        height: 8,
+        position: { x: 74.3, y: 8, z: 0 },
+        rotation: -Math.PI/2,
+        title: "The Last Supper"
+    },
+
+    // West Wall (Left wall) paintings
+    {
+        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Edvard_Munch%2C_1893%2C_The_Scream%2C_oil%2C_tempera_and_pastel_on_cardboard%2C_91_x_73_cm%2C_National_Gallery_of_Norway.jpg/800px-Edvard_Munch%2C_1893%2C_The_Scream%2C_oil%2C_tempera_and_pastel_on_cardboard%2C_91_x_73_cm%2C_National_Gallery_of_Norway.jpg",
+        width: 8,
+        height: 10,
+        position: { x: -74.3, y: 8, z: -30 },
+        rotation: Math.PI/2,
+        title: "The Scream"
+    },
+    {
+        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Leonardo_da_Vinci_-_Lady_with_an_Ermine.jpg/800px-Leonardo_da_Vinci_-_Lady_with_an_Ermine.jpg",
+        width: 7,
+        height: 9,
+        position: { x: -74.3, y: 8, z: 0 },
+        rotation: Math.PI/2,
+        title: "Lady with an Ermine"
+    },
+    {
+        url: "https://indianartzone.com/pub/media/catalog/product/cache/6b1c09900b407c50fce2db5e66ebc123/1/5/1556.-sanjay-tikkal-meditation-30-x-30-inches-acrylic-on-canvas.jpg",
+        width: 7,
+        height: 7,
+        position: { x: -10, y: 8, z: 49.3 },
+        rotation: Math.PI,
+        title: "Meditation"
+    },
+    {
+        url: "https://dza2a2ql7zktf.cloudfront.net/binaries-cdn/dqzqcuqf9/image/fetch/q_auto,w_500/https://d2u3kfwd92fzu7.cloudfront.net/catalog/artwork/gallery/1380/Departure_2_DSC8608_copy-2.jpg",
+        width: 8,
+        height: 10,
+        position: { x: -60, y: 8, z: 49.3 },
+        rotation: Math.PI,
+        title: "Departure 2"
+    }
+];
+
+const SECOND_FLOOR_PAINTINGS = [
+    {
+        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Meisje_met_de_parel.jpg/800px-Meisje_met_de_parel.jpg",
+        width: 5,
+        height: 7,
+        position: { x: -45, y: ROOM_CONFIG.mainHall.height + 7, z: -24 },
+        rotation: 0,
+        title: "Modern Art Collection"
+    },
+    {
+        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/A_Sunday_on_La_Grande_Jatte%2C_Georges_Seurat%2C_1884.jpg/1280px-A_Sunday_on_La_Grande_Jatte%2C_Georges_Seurat%2C_1884.jpg",
+        width: 8,
+        height: 6,
+        position: { x: -30, y: ROOM_CONFIG.mainHall.height + 7, z: -24 },
+        rotation: 0,
+        title: "Sunday Afternoon"
+    },
+    // Add more paintings for second floor
+];
+
+// Add these museum interior elements
+const MUSEUM_FEATURES = {
+    // Information Stands
+    infoStands: [
+        {
+            position: { x: -40, y: 0, z: 10 },
+            rotation: Math.PI/4,
+            text: "Welcome to the Art Museum"
+        },
+        {
+            position: { x: 40, y: 0, z: 10 },
+            rotation: -Math.PI/4,
+            text: "Exhibition Guide"
+        }
+    ],
+    
+    // Display Cases
+    displayCases: [
+        {
+            position: { x: 0, y: 0, z: 20 },
+            size: { width: 4, height: 4, depth: 4 },
+            content: "artifacts/sculpture1.jpg"
+        },
+        {
+            position: { x: -20, y: 0, z: 20 },
+            size: { width: 4, height: 4, depth: 4 },
+            content: "artifacts/sculpture2.jpg"
+        }
+    ],
+
+    // Benches
+    benches: [
+        { position: { x: -30, y: 0, z: 0 }, rotation: 0 },
+        { position: { x: 30, y: 0, z: 0 }, rotation: 0 },
+        { position: { x: 0, y: 0, z: -30 }, rotation: Math.PI/2 }
+    ],
+
+    // Floor Patterns
+    floorPattern: {
+        mainColor: 0x808080,
+        accentColor: 0x606060,
+        patternSize: 10
+    }
+};
+
+// Add detailed information for all paintings
+const PAINTING_DETAILS = {
+    "Kashmir": {
+        artist: "Vasant Amberkar",
+        year: "Contemporary",
+        description: "A beautiful landscape painting depicting the serene beauty of Kashmir. The artwork showcases the artist's masterful use of color and composition to capture the natural beauty of the region.",
+        technique: "Oil on canvas",
+        location: "India Art Gallery"
+    },
+    "Mona Lisa": {
+        artist: "Leonardo da Vinci",
+        year: "1503-1519",
+        description: "The Mona Lisa is one of the most famous paintings in the world. Created by Leonardo da Vinci, it features a woman with an enigmatic smile that has captivated viewers for centuries. The painting is known for its innovative techniques including sfumato.",
+        technique: "Oil on poplar panel",
+        location: "Louvre Museum, Paris"
+    },
+    "Starry Night": {
+        artist: "Vincent van Gogh",
+        year: "1889",
+        description: "The Starry Night depicts a night scene with swirling clouds, bright stars, and a crescent moon over a village with a prominent church spire. This masterpiece was created while Van Gogh was staying at the Saint-Paul-de-Mausole asylum.",
+        technique: "Oil on canvas",
+        location: "Museum of Modern Art, New York"
+    },
+    "The Scream": {
+        artist: "Edvard Munch",
+        year: "1893",
+        description: "The Scream represents the universal anxiety of modern life. The iconic figure with an agonized expression against a landscape with a swirling orange sky has become one of the most familiar images in modern art.",
+        technique: "Oil, tempera, and pastel on cardboard",
+        location: "National Gallery, Oslo"
+    },
+    "falling bird": {
+        artist: "Tyeb Mehta",
+        year: "1988",
+        description: "A masterpiece by one of India's most significant modern artists, Tyeb Mehta. The painting depicts his iconic 'falling figure' motif, rendered in his distinctive style of flat colors and sharp lines. The work represents both movement and tension, characteristic of Mehta's exploration of human condition and violence.",
+        technique: "Oil on canvas",
+        location: "Christie's Auction House",
+        significance: "Part of Mehta's famous 'Falling Series', this work exemplifies his minimalist approach and powerful visual vocabulary that made him one of India's most important modernist painters.",
+        style: "Modern Indian Art, Minimalist Expressionism"
+    },
+    "The Creation of Adam": {
+        artist: "Michelangelo",
+        year: "1508-1512",
+        description: "Part of the Sistine Chapel's ceiling, this iconic scene depicts God giving life to Adam. It's one of the most replicated religious paintings of all time and represents the moment of divine creation.",
+        technique: "Fresco",
+        location: "Sistine Chapel, Vatican City"
+    },
+    "Figure on Rickshaw": {
+        artist: "Tyeb Mehta",
+        year: "1984",
+        description: "A powerful modernist work depicting a figure on a rickshaw, characteristic of Mehta's distinctive style. The painting uses bold colors and geometric forms to convey movement and tension. This piece is part of his famous rickshaw series that explores urban life and human condition in modern India.",
+        technique: "Oil on canvas",
+        location: "Private Collection",
+        significance: "Part of Mehta's iconic Rickshaw series, this painting represents his exploration of human struggle and dignity. The diagonal composition and fragmented forms are signature elements of his modernist style.",
+        style: "Indian Modernism",
+        additionalInfo: "Tyeb Mehta's rickshaw series is considered one of the most significant contributions to Indian modern art, reflecting both social commentary and formal innovation in painting."
+    },
+    "The Last Supper": {
+        artist: "Leonardo da Vinci",
+        year: "1495-1498",
+        description: "This masterpiece depicts the dramatic moment when Jesus announces that one of his Twelve Apostles would betray him. The painting is noted for its pioneering use of perspective and psychological depth.",
+        technique: "Tempera on gesso, pitch and mastic",
+        location: "Santa Maria delle Grazie, Milan"
+    },
+    "Lady with an Ermine": {
+        artist: "Leonardo da Vinci",
+        year: "1489-1490",
+        description: "This portrait shows Cecilia Gallerani, the mistress of Leonardo's patron Ludovico Sforza, holding a white ermine. The painting is notable for its innovative composition and psychological insight.",
+        technique: "Oil on walnut panel",
+        location: "Czartoryski Museum, Kraków"
+    },
+    "A Sunday Afternoon": {
+        artist: "Georges Seurat",
+        year: "1884-1886",
+        description: "A masterpiece of pointillist technique, this painting depicts Parisians relaxing in a suburban park. The work is composed entirely of tiny dots of color applied in a precise pattern.",
+        technique: "Oil on canvas",
+        location: "Art Institute of Chicago"
+    },
+    "Van Gogh Self Portrait": {
+        artist: "Vincent van Gogh",
+        year: "1889",
+        description: "One of many self-portraits by Van Gogh, this work was created during his stay at the Saint-Rémy asylum. It shows the artist's distinctive style and intense psychological expression.",
+        technique: "Oil on canvas",
+        location: "Musée d'Orsay, Paris"
+    },
+    "Meditation": {
+        artist: "Sanjay Tikkal",
+        year: "Contemporary",
+        description: "A mesmerizing acrylic painting depicting meditation, showcasing the spiritual and contemplative aspects of Indian art. The artwork uses a harmonious blend of colors to create a peaceful atmosphere.",
+        technique: "Acrylic on Canvas",
+        location: "Indian Art Zone Gallery",
+        size: "30 x 30 inches"
+    },
+    "Departure 2": {
+        artist: "Krishen Khanna",
+        year: "2008",
+        description: "A striking composition from Khanna's iconic 'Departure' series, this painting captures the essence of human migration and movement. The artwork depicts figures in transit, rendered in bold, gestural brushstrokes that create a sense of urgency and motion. The composition uses a dramatic interplay of light and shadow to convey the emotional weight of departure.",
+        technique: "Oil on canvas",
+        location: "DAG Modern Art Gallery",
+        significance: "Part of Krishen Khanna's seminal 'Departure' series, this work reflects on themes of exodus, displacement, and human journeys. The painting is particularly significant in the context of post-partition Indian art, drawing from Khanna's personal experiences and observations.",
+        style: "Contemporary Indian Modernism",
+        dimensions: "Large format",
+        colorPalette: "Rich earth tones with dramatic contrasts between light and dark",
+        historicalContext: "Created during a period when Khanna was deeply engaged with themes of human displacement and migration, drawing parallels between historical events and contemporary social movements."
+    }
+};
+
+// Add this HTML for the painting details popup
+const popupHTML = `
+<div id="paintingPopup" style="display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); 
+    background-color: rgba(0, 0, 0, 0.9); color: white; padding: 25px; border-radius: 15px; 
+    font-family: Arial; max-width: 600px; z-index: 1000; box-shadow: 0 0 20px rgba(0,0,0,0.5);">
+    <h2 id="paintingTitle" style="margin: 0 0 15px 0; font-size: 28px; color: #ffd700;"></h2>
+    <div id="paintingDetails" style="line-height: 1.6;">
+        <div id="paintingBasicInfo" style="margin-bottom: 15px;"></div>
+        <div id="paintingDescription" style="margin-bottom: 15px;"></div>
+        <div id="paintingLocation" style="color: #ffd700;"></div>
+    </div>
+    <div style="text-align: center; margin-top: 15px; font-size: 14px; color: #888;">
+        Press SPACE to close
+    </div>
+</div>`;
+
+document.body.insertAdjacentHTML('beforeend', popupHTML);
+
+// Add these variables at the top with your other globals
+let nearbyPainting = null;
+let popupVisible = false;
+
+function init() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x808080);
+
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 8, 0);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    controls = new THREE.PointerLockControls(camera, document.body);
+
+    document.addEventListener('click', function() {
+        controls.lock();
+    });
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+
+    // Create museum spaces
+    createMuseum();
+    createMuseumInterior();
+    
+    // Add paintings
+    addPaintings();
+    
+    // Setup lighting
+    setupLighting();
+
+    window.addEventListener('resize', onWindowResize, false);
+
+    animate();
+
+    // Add event listener for closing popup with Escape key
+    document.addEventListener('keydown', (event) => {
+        if (event.code === 'Escape' && popupVisible) {
+            hidePaintingDetails();
+            popupVisible = false;
+        }
+    });
+}
+
+function createMuseum() {
+    // Create main hall
+    createSpace(ROOM_CONFIG.mainHall);
+    
+    // Create left wing
+    createSpace(ROOM_CONFIG.leftWing);
+    
+    // Create right wing
+    createSpace(ROOM_CONFIG.rightWing);
+    
+    // Create connecting passages
+    createPassages();
+}
+
+function createSpace(config) {
+    const space = new THREE.Group();
+
+    // Floor
+    const floorGeometry = new THREE.PlaneGeometry(config.width, config.depth);
+    const floorMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x808080,
+        roughness: 0.8 
+    });
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(config.position.x, 0, config.position.z);
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // Walls
+    const wallMaterial = new THREE.MeshStandardMaterial({ 
+        color: config.color,
+        roughness: 0.5 
+    });
+
+    // Create walls except where passages will be
+    createWalls(config, wallMaterial);
+
+    // Ceiling
+    const ceiling = floor.clone();
+    ceiling.position.y = config.height;
+    scene.add(ceiling);
+}
+
+function createWalls(config, material) {
+    // Helper function to check if wall should have opening
+    function shouldHaveOpening(wallPosition) {
+        if (config === ROOM_CONFIG.mainHall) {
+            if (wallPosition === 'left' || wallPosition === 'right') {
+                return true;
+            }
+        }
+        if (config === ROOM_CONFIG.leftWing && wallPosition === 'right') {
+            return true;
+        }
+        if (config === ROOM_CONFIG.rightWing && wallPosition === 'left') {
+            return true;
+        }
+        return false;
+    }
+
+    // Create walls with openings where needed
+    function createWallWithOpening(width, height, depth, position, wallPosition) {
+        if (shouldHaveOpening(wallPosition)) {
+            // Create wall with opening
+            const openingWidth = 20;
+            const openingHeight = 15;
+
+            // Bottom section
+            const bottomWall = new THREE.Mesh(
+                new THREE.BoxGeometry(width, height - openingHeight, depth),
+                material
+            );
+            bottomWall.position.copy(position);
+            bottomWall.position.y = (height - openingHeight) / 2;
+            scene.add(bottomWall);
+
+            // Top section
+            const topWall = new THREE.Mesh(
+                new THREE.BoxGeometry(width, openingHeight, depth),
+                material
+            );
+            topWall.position.copy(position);
+            topWall.position.y = height - openingHeight/2;
+            scene.add(topWall);
+
+            // Side sections for wide walls
+            if (width > depth) {
+                const leftSection = new THREE.Mesh(
+                    new THREE.BoxGeometry((width - openingWidth)/2, openingHeight, depth),
+                    material
+                );
+                leftSection.position.copy(position);
+                leftSection.position.x -= openingWidth/2 + (width - openingWidth)/4;
+                leftSection.position.y = height/2;
+                scene.add(leftSection);
+
+                const rightSection = new THREE.Mesh(
+                    new THREE.BoxGeometry((width - openingWidth)/2, openingHeight, depth),
+                    material
+                );
+                rightSection.position.copy(position);
+                rightSection.position.x += openingWidth/2 + (width - openingWidth)/4;
+                rightSection.position.y = height/2;
+                scene.add(rightSection);
+            }
+        } else {
+            // Create solid wall
+            const wall = new THREE.Mesh(
+                new THREE.BoxGeometry(width, height, depth),
+                material
+            );
+            wall.position.copy(position);
+            wall.position.y = height/2;
+            scene.add(wall);
+        }
+    }
+
+    // Create all walls
+    // North wall
+    createWallWithOpening(
+        config.width, 
+        config.height,
+        1,
+        new THREE.Vector3(config.position.x, 0, config.position.z - config.depth/2),
+        'north'
+    );
+
+    // South wall
+    createWallWithOpening(
+        config.width,
+        config.height,
+        1,
+        new THREE.Vector3(config.position.x, 0, config.position.z + config.depth/2),
+        'south'
+    );
+
+    // East wall
+    createWallWithOpening(
+        1,
+        config.height,
+        config.depth,
+        new THREE.Vector3(config.position.x + config.width/2, 0, config.position.z),
+        'right'
+    );
+
+    // West wall
+    createWallWithOpening(
+        1,
+        config.height,
+        config.depth,
+        new THREE.Vector3(config.position.x - config.width/2, 0, config.position.z),
+        'left'
+    );
+}
+
+function createPassages() {
+    const passageMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xe0e0e0,
+        roughness: 0.5 
+    });
+
+    // Left passage
+    const leftPassage = new THREE.Mesh(
+        new THREE.BoxGeometry(30, ROOM_CONFIG.mainHall.height, 20),
+        passageMaterial
+    );
+    leftPassage.position.set(-85, ROOM_CONFIG.mainHall.height/2, 0);
+    scene.add(leftPassage);
+
+    // Right passage
+    const rightPassage = new THREE.Mesh(
+        new THREE.BoxGeometry(30, ROOM_CONFIG.mainHall.height, 20),
+        passageMaterial
+    );
+    rightPassage.position.set(85, ROOM_CONFIG.mainHall.height/2, 0);
+    scene.add(rightPassage);
+}
+
+function addPaintings() {
+    PAINTINGS.forEach(paintingConfig => {
+        const painting = createPainting(paintingConfig);
+        scene.add(painting);
+
+        // Add spotlight for each painting
+        const spotLight = new THREE.SpotLight(0xffffff, 0.8);
+        spotLight.position.set(
+            paintingConfig.position.x + Math.sin(paintingConfig.rotation) * 5,
+            paintingConfig.position.y + 5,
+            paintingConfig.position.z + Math.cos(paintingConfig.rotation) * 5
+        );
+        spotLight.target.position.set(
+            paintingConfig.position.x,
+            paintingConfig.position.y,
+            paintingConfig.position.z
+        );
+        spotLight.angle = Math.PI/6;
+        spotLight.penumbra = 0.5;
+        spotLight.decay = 2;
+        spotLight.distance = 20;
+        scene.add(spotLight);
+        scene.add(spotLight.target);
+    });
+}
+
+function createPainting(paintingConfig) {
+    const group = new THREE.Group();
+
+    // Create golden frame
+    const frameGeometry = new THREE.BoxGeometry(
+        paintingConfig.width + 0.5,
+        paintingConfig.height + 0.5,
+        0.2
+    );
+    const frameMaterial = new THREE.MeshStandardMaterial({
+        color: 0xb39700,
+        metalness: 0.8,
+        roughness: 0.3
+    });
+    const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+    group.add(frame);
+
+    // Create painting
+    const loader = new THREE.TextureLoader();
+    loader.load(paintingConfig.url, (texture) => {
+        const paintingGeometry = new THREE.PlaneGeometry(
+            paintingConfig.width,
+            paintingConfig.height
+        );
+        const paintingMaterial = new THREE.MeshBasicMaterial({
+            map: texture,
+            side: THREE.DoubleSide
+        });
+        const painting = new THREE.Mesh(paintingGeometry, paintingMaterial);
+        painting.position.z = 0.11; // Slightly in front of frame
+        group.add(painting);
+
+        // Add painting title
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 512;
+        canvas.height = 64;
+        context.fillStyle = '#000000';
+        context.font = 'bold 40px Arial';
+        context.fillText(paintingConfig.title, 10, 40);
+
+        const titleTexture = new THREE.CanvasTexture(canvas);
+        const titleMaterial = new THREE.MeshBasicMaterial({
+            map: titleTexture,
+            transparent: true
+        });
+        const titleGeometry = new THREE.PlaneGeometry(2, 0.5);
+        const titleMesh = new THREE.Mesh(titleGeometry, titleMaterial);
+        titleMesh.position.y = -paintingConfig.height/2 - 0.7;
+        titleMesh.position.z = 0.11;
+        group.add(titleMesh);
+    });
+
+    // Position and rotate the painting group
+    group.position.set(
+        paintingConfig.position.x,
+        paintingConfig.position.y,
+        paintingConfig.position.z
+    );
+    group.rotation.y = paintingConfig.rotation;
+
+    return group;
+}
+
+function createSecondFloorPaintings() {
+    SECOND_FLOOR_PAINTINGS.forEach(painting => {
+        const loader = new THREE.TextureLoader();
+        loader.load(painting.url, function(texture) {
+            const frame = new THREE.BoxGeometry(painting.width + 0.2, painting.height + 0.2, 0.2);
+            const frameMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xb39700,
+                metalness: 0.8,
+                roughness: 0.3
+            });
+            const frameObj = new THREE.Mesh(frame, frameMaterial);
+
+            const paintingGeometry = new THREE.PlaneGeometry(painting.width, painting.height);
+            const paintingMaterial = new THREE.MeshBasicMaterial({ map: texture });
+            const paintingObj = new THREE.Mesh(paintingGeometry, paintingMaterial);
+            paintingObj.position.z = 0.11;
+
+            const group = new THREE.Group();
+            group.add(frameObj);
+            group.add(paintingObj);
+            
+            group.position.set(painting.position.x, painting.position.y, painting.position.z);
+            group.rotation.y = painting.rotation;
+            
+            scene.add(group);
+        });
+    });
+}
+
+function setupLighting() {
+    // Ambient light
+    const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambient);
+
+    // Main directional light
+    const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    mainLight.position.set(0, ROOM_CONFIG.mainHall.height - 2, 0);
+    mainLight.castShadow = true;
+    scene.add(mainLight);
+
+    // Corner lights for better painting visibility
+    const cornerPositions = [
+        { x: ROOM_CONFIG.mainHall.width/3, z: ROOM_CONFIG.mainHall.depth/3 },
+        { x: -ROOM_CONFIG.mainHall.width/3, z: ROOM_CONFIG.mainHall.depth/3 },
+        { x: ROOM_CONFIG.mainHall.width/3, z: -ROOM_CONFIG.mainHall.depth/3 },
+        { x: -ROOM_CONFIG.mainHall.width/3, z: -ROOM_CONFIG.mainHall.depth/3 }
+    ];
+
+    cornerPositions.forEach(pos => {
+        const light = new THREE.PointLight(0xffffff, 0.5, 100);
+        light.position.set(pos.x, ROOM_CONFIG.mainHall.height - 5, pos.z);
+        scene.add(light);
+    });
+}
+
+function onKeyDown(event) {
+    switch(event.code) {
+        case 'ArrowUp':
+        case 'KeyW':
+            moveForward = true;
+            break;
+        case 'ArrowDown':
+        case 'KeyS':
+            moveBackward = true;
+            break;
+        case 'ArrowLeft':
+        case 'KeyA':
+            moveLeft = true;
+            break;
+        case 'ArrowRight':
+        case 'KeyD':
+            moveRight = true;
+            break;
+        case 'Space':
+            if (nearbyPainting && !popupVisible) {
+                showPaintingDetails(nearbyPainting);
+                popupVisible = true;
+            } else if (popupVisible) {
+                hidePaintingDetails();
+                popupVisible = false;
+            }
+            break;
+    }
+}
+
+function onKeyUp(event) {
+    switch(event.code) {
+        case 'ArrowUp':
+        case 'KeyW':
+            moveForward = false;
+            break;
+        case 'ArrowDown':
+        case 'KeyS':
+            moveBackward = false;
+            break;
+        case 'ArrowLeft':
+        case 'KeyA':
+            moveLeft = false;
+            break;
+        case 'ArrowRight':
+        case 'KeyD':
+            moveRight = false;
+            break;
+    }
+}
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function checkCollision(position) {
+    const PLAYER_RADIUS = 3;
+    const WALL_MARGIN = 4;
+
+    // Room boundaries
+    const bounds = {
+        minX: -ROOM_CONFIG.mainHall.width/2 + WALL_MARGIN,
+        maxX: ROOM_CONFIG.mainHall.width/2 - WALL_MARGIN,
+        minZ: -ROOM_CONFIG.mainHall.depth/2 + WALL_MARGIN,
+        maxZ: ROOM_CONFIG.mainHall.depth/2 - WALL_MARGIN
+    };
+
+    let newPosition = position.clone();
+    let collision = false;
+
+    // Check X-axis collision
+    if (position.x < bounds.minX) {
+        newPosition.x = bounds.minX;
+        collision = true;
+    } else if (position.x > bounds.maxX) {
+        newPosition.x = bounds.maxX;
+        collision = true;
+    }
+
+    // Check Z-axis collision
+    if (position.z < bounds.minZ) {
+        newPosition.z = bounds.minZ;
+        collision = true;
+    } else if (position.z > bounds.maxZ) {
+        newPosition.z = bounds.maxZ;
+        collision = true;
+    }
+
+    return { collision, newPosition };
+}
+
+function updateMovement(delta) {
+    if (!controls.isLocked) return;
+
+    // Update velocities with damping
+    velocity.x -= velocity.x * 10.0 * delta;
+    velocity.z -= velocity.z * 10.0 * delta;
+
+    // Get movement direction
+    direction.z = Number(moveForward) - Number(moveBackward);
+    direction.x = Number(moveRight) - Number(moveLeft);
+    direction.normalize();
+
+    // Apply movement forces
+    if (moveForward || moveBackward) {
+        velocity.z -= direction.z * MOVEMENT_SPEED * delta;
+    }
+    if (moveLeft || moveRight) {
+        velocity.x -= direction.x * MOVEMENT_SPEED * delta;
+    }
+
+    // Calculate next position
+    const nextPosition = camera.position.clone();
+    nextPosition.x -= velocity.x * delta;
+    nextPosition.z -= velocity.z * delta;
+
+    // Check collision and get corrected position
+    const { collision, newPosition } = checkCollision(nextPosition);
+
+    if (collision && WALL_SLIDE) {
+        // Try moving along walls when colliding
+        const tryX = camera.position.clone();
+        tryX.x = newPosition.x;
+        const collisionX = checkCollision(tryX);
+
+        const tryZ = camera.position.clone();
+        tryZ.z = newPosition.z;
+        const collisionZ = checkCollision(tryZ);
+
+        // Apply sliding movement
+        if (!collisionX.collision) {
+            controls.moveRight(-velocity.x * delta);
+        }
+        if (!collisionZ.collision) {
+            controls.moveForward(-velocity.z * delta);
+        }
+    } else {
+        // No collision, move normally
+        controls.moveRight(-velocity.x * delta);
+        controls.moveForward(-velocity.z * delta);
+    }
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    if (controls.isLocked) {
+        const delta = Math.min((performance.now() - prevTime) / 1000, 0.1);
+        
+        // Check if player is near a painting
+        nearbyPainting = checkPaintingProximity();
+        updateProximityIndicator(nearbyPainting);
+        
+        updateMovement(delta);
+        prevTime = performance.now();
+    }
+
+    renderer.render(scene, camera);
+}
+
+// Function to create museum interior
+function createMuseumInterior() {
+    createFloorPattern();
+    createInfoStands();
+    createDisplayCases();
+    createBenches();
+    createLightingFixtures();
+    createWallDecoration();
+}
+
+// Create patterned floor
+function createFloorPattern() {
+    const pattern = new THREE.Group();
+    const tileSize = MUSEUM_FEATURES.floorPattern.patternSize;
+    const roomWidth = ROOM_CONFIG.mainHall.width;
+    const roomDepth = ROOM_CONFIG.mainHall.depth;
+
+    for(let x = -roomWidth/2; x < roomWidth/2; x += tileSize) {
+        for(let z = -roomDepth/2; z < roomDepth/2; z += tileSize) {
+            const isAlternate = (Math.floor(x/tileSize) + Math.floor(z/tileSize)) % 2 === 0;
+            const tileGeometry = new THREE.PlaneGeometry(tileSize, tileSize);
+            const tileMaterial = new THREE.MeshStandardMaterial({
+                color: isAlternate ? MUSEUM_FEATURES.floorPattern.mainColor : MUSEUM_FEATURES.floorPattern.accentColor,
+                roughness: 0.8
+            });
+            const tile = new THREE.Mesh(tileGeometry, tileMaterial);
+            tile.rotation.x = -Math.PI/2;
+            tile.position.set(x + tileSize/2, 0.01, z + tileSize/2);
+            pattern.add(tile);
+        }
+    }
+    scene.add(pattern);
+}
+
+// Create information stands
+function createInfoStands() {
+    MUSEUM_FEATURES.infoStands.forEach(stand => {
+        const standGroup = new THREE.Group();
+
+        // Stand base
+        const baseGeometry = new THREE.BoxGeometry(2, 3, 2);
+        const baseMaterial = new THREE.MeshStandardMaterial({
+            color: 0x8b4513,
+            roughness: 0.5
+        });
+        const base = new THREE.Mesh(baseGeometry, baseMaterial);
+        base.position.y = 1.5;
+        standGroup.add(base);
+
+        // Information panel
+        const panelGeometry = new THREE.PlaneGeometry(3, 2);
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 512;
+        canvas.height = 342;
+        
+        // Style the text
+        context.fillStyle = 'white';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = 'black';
+        context.font = 'bold 36px Arial';
+        context.textAlign = 'center';
+        context.fillText(stand.text, canvas.width/2, canvas.height/2);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const panelMaterial = new THREE.MeshBasicMaterial({
+            map: texture,
+            side: THREE.DoubleSide
+        });
+        const panel = new THREE.Mesh(panelGeometry, panelMaterial);
+        panel.position.y = 3;
+        panel.rotation.y = stand.rotation;
+        standGroup.add(panel);
+
+        standGroup.position.set(stand.position.x, stand.position.y, stand.position.z);
+        scene.add(standGroup);
+    });
+}
+
+// Create display cases
+function createDisplayCases() {
+    MUSEUM_FEATURES.displayCases.forEach(displayCase => {
+        const caseGroup = new THREE.Group();
+
+        // Glass case
+        const glassGeometry = new THREE.BoxGeometry(
+            displayCase.size.width,
+            displayCase.size.height,
+            displayCase.size.depth
+        );
+        const glassMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.3,
+            roughness: 0,
+            metalness: 0,
+            clearcoat: 1.0,
+            clearcoatRoughness: 0.1
+        });
+        const glass = new THREE.Mesh(glassGeometry, glassMaterial);
+        glass.position.y = displayCase.size.height/2;
+        caseGroup.add(glass);
+
+        // Base
+        const baseGeometry = new THREE.BoxGeometry(
+            displayCase.size.width + 0.5,
+            0.5,
+            displayCase.size.depth + 0.5
+        );
+        const baseMaterial = new THREE.MeshStandardMaterial({
+            color: 0x45362b,
+            roughness: 0.8
+        });
+        const base = new THREE.Mesh(baseGeometry, baseMaterial);
+        base.position.y = 0.25;
+        caseGroup.add(base);
+
+        caseGroup.position.set(
+            displayCase.position.x,
+            displayCase.position.y,
+            displayCase.position.z
+        );
+        scene.add(caseGroup);
+    });
+}
+
+// Create benches
+function createBenches() {
+    MUSEUM_FEATURES.benches.forEach(bench => {
+        const benchGroup = new THREE.Group();
+
+        // Seat
+        const seatGeometry = new THREE.BoxGeometry(6, 0.5, 2);
+        const seatMaterial = new THREE.MeshStandardMaterial({
+            color: 0x8b4513,
+            roughness: 0.8
+        });
+        const seat = new THREE.Mesh(seatGeometry, seatMaterial);
+        seat.position.y = 2;
+        benchGroup.add(seat);
+
+        // Legs
+        const legGeometry = new THREE.BoxGeometry(0.4, 2, 0.4);
+        const legMaterial = new THREE.MeshStandardMaterial({
+            color: 0x45362b,
+            roughness: 0.8
+        });
+
+        [-2.5, 2.5].forEach(x => {
+            [-0.7, 0.7].forEach(z => {
+                const leg = new THREE.Mesh(legGeometry, legMaterial);
+                leg.position.set(x, 1, z);
+                benchGroup.add(leg);
+            });
+        });
+
+        // Backrest
+        const backrestGeometry = new THREE.BoxGeometry(6, 2, 0.5);
+        const backrest = new THREE.Mesh(backrestGeometry, seatMaterial);
+        backrest.position.set(0, 3, -0.75);
+        benchGroup.add(backrest);
+
+        benchGroup.rotation.y = bench.rotation;
+        benchGroup.position.set(bench.position.x, bench.position.y, bench.position.z);
+        scene.add(benchGroup);
+    });
+}
+
+// Create wall decoration and trim
+function createWallDecoration() {
+    // Wall trim
+    const createTrim = (width, height, depth, position) => {
+        const trimGeometry = new THREE.BoxGeometry(width, height, depth);
+        const trimMaterial = new THREE.MeshStandardMaterial({
+            color: 0x45362b,
+            roughness: 0.5
+        });
+        const trim = new THREE.Mesh(trimGeometry, trimMaterial);
+        trim.position.copy(position);
+        scene.add(trim);
+    };
+
+    // Add baseboards
+    const baseboard = {
+        height: 0.5,
+        depth: 0.1
+    };
+
+    // Add crown molding
+    const crownMolding = {
+        height: 0.8,
+        depth: 0.2
+    };
+
+    // Add wall trim for each room section
+    Object.values(ROOM_CONFIG).forEach(room => {
+        // Baseboards
+        createTrim(room.width, baseboard.height, baseboard.depth, 
+            new THREE.Vector3(room.position.x, baseboard.height/2, room.position.z - room.depth/2));
+        createTrim(room.width, baseboard.height, baseboard.depth,
+            new THREE.Vector3(room.position.x, baseboard.height/2, room.position.z + room.depth/2));
+        
+        // Crown molding
+        createTrim(room.width, crownMolding.height, crownMolding.depth,
+            new THREE.Vector3(room.position.x, room.height - crownMolding.height/2, room.position.z - room.depth/2));
+        createTrim(room.width, crownMolding.height, crownMolding.depth,
+            new THREE.Vector3(room.position.x, room.height - crownMolding.height/2, room.position.z + room.depth/2));
+    });
+}
+
+// Create museum-style lighting fixtures
+function createLightingFixtures() {
+    const createSpotlight = (position, targetPosition) => {
+        const light = new THREE.SpotLight(0xffffff, 1);
+        light.position.copy(position);
+        light.target.position.copy(targetPosition);
+        light.angle = Math.PI/6;
+        light.penumbra = 0.5;
+        light.decay = 2;
+        light.distance = 30;
+        light.castShadow = true;
+        
+        // Create visible fixture
+        const fixtureGeometry = new THREE.CylinderGeometry(0.3, 0.5, 0.8);
+        const fixtureMaterial = new THREE.MeshStandardMaterial({
+            color: 0x2b2b2b,
+            roughness: 0.7
+        });
+        const fixture = new THREE.Mesh(fixtureGeometry, fixtureMaterial);
+        fixture.position.copy(position);
+        
+        scene.add(light);
+        scene.add(light.target);
+        scene.add(fixture);
+    };
+
+    // Add spotlights for paintings and display cases
+    PAINTINGS.forEach(painting => {
+        const spotlightPosition = new THREE.Vector3(
+            painting.position.x,
+            ROOM_CONFIG.mainHall.height - 1,
+            painting.position.z
+        );
+        createSpotlight(spotlightPosition, new THREE.Vector3(
+            painting.position.x,
+            painting.position.y,
+            painting.position.z
+        ));
+    });
+
+    // Add ambient ceiling lights
+    const createCeilingLight = (position) => {
+        const light = new THREE.PointLight(0xffffff, 0.5, 20);
+        light.position.copy(position);
+        
+        const fixtureGeometry = new THREE.BoxGeometry(2, 0.2, 2);
+        const fixtureMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            emissive: 0xffffff,
+            emissiveIntensity: 0.5
+        });
+        const fixture = new THREE.Mesh(fixtureGeometry, fixtureMaterial);
+        fixture.position.copy(position);
+        
+        scene.add(light);
+        scene.add(fixture);
+    };
+
+    // Add ceiling lights throughout the museum
+    for(let x = -60; x <= 60; x += 30) {
+        for(let z = -30; z <= 30; z += 30) {
+            createCeilingLight(new THREE.Vector3(x, ROOM_CONFIG.mainHall.height - 0.1, z));
+        }
+    }
+}
+
+// Add this function to check if player is near a painting
+function checkPaintingProximity() {
+    const playerPosition = camera.position;
+    let closestPainting = null;
+    let closestDistance = 10; // Maximum distance to detect paintings
+
+    PAINTINGS.forEach(painting => {
+        const paintingPosition = new THREE.Vector3(
+            painting.position.x,
+            painting.position.y,
+            painting.position.z
+        );
+        const distance = playerPosition.distanceTo(paintingPosition);
+
+        if (distance < closestDistance) {
+            closestDistance = distance;
+            closestPainting = painting;
+        }
+    });
+
+    return closestPainting;
+}
+
+// Add these functions to show/hide painting details
+function showPaintingDetails(painting) {
+    const popup = document.getElementById('paintingPopup');
+    const title = document.getElementById('paintingTitle');
+    const basicInfo = document.getElementById('paintingBasicInfo');
+    const description = document.getElementById('paintingDescription');
+    const location = document.getElementById('paintingLocation');
+    
+    const details = PAINTING_DETAILS[painting.title];
+    if (details) {
+        title.textContent = painting.title;
+        
+        basicInfo.innerHTML = `
+            <strong style="color: #ffd700;">Artist:</strong> ${details.artist}<br>
+            <strong style="color: #ffd700;">Year:</strong> ${details.year}<br>
+            <strong style="color: #ffd700;">Technique:</strong> ${details.technique}
+        `;
+        
+        description.textContent = details.description;
+        
+        location.innerHTML = `
+            <strong>Current Location:</strong> ${details.location}
+        `;
+        
+        popup.style.display = 'block';
+    }
+}
+
+function hidePaintingDetails() {
+    const popup = document.getElementById('paintingPopup');
+    popup.style.display = 'none';
+}
+
+// Add proximity indicator with painting name
+function updateProximityIndicator(painting) {
+    const indicator = document.getElementById('paintingIndicator');
+    if (painting && !popupVisible) {
+        const indicatorHTML = `
+            <div id="paintingIndicator" style="position: fixed; bottom: 20px; left: 50%; 
+                transform: translateX(-50%); background-color: rgba(0, 0, 0, 0.7); 
+                color: white; padding: 15px; border-radius: 10px; font-family: Arial;
+                border: 1px solid #ffd700;">
+                <div style="font-size: 18px; margin-bottom: 5px;">${painting.title}</div>
+                <div style="font-size: 14px; color: #ffd700;">Press SPACE to view details</div>
+            </div>`;
+        
+        if (!indicator) {
+            document.body.insertAdjacentHTML('beforeend', indicatorHTML);
+        } else {
+            indicator.innerHTML = indicatorHTML;
+        }
+    } else if (indicator) {
+        indicator.remove();
+    }
+}
+
+init();
+</script>
 </body>
-</html> 
-
-
+</html>

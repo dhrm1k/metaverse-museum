@@ -1,0 +1,788 @@
+Here's the complete updated code with fixes for smooth movement:
+
+```html:new-version.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Museum</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; }
+        canvas { display: block; }
+        #instructions {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            z-index: 100;
+        }
+        #roomInfo {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            transition: opacity 0.5s;
+            opacity: 0;
+        }
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            z-index: 999;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">Loading Museum...</div>
+    <div id="instructions">
+        <h3>Minecraft Museum</h3>
+        <p>Click to start<br>
+        WASD to move<br>
+        Mouse to look around<br>
+        SPACE to jump<br>
+        SHIFT to run</p>
+    </div>
+    <div id="roomInfo"></div>
+    <script type="module">
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js';
+        
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); // Sky blue
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        
+        // Simple placeholder textures to avoid loading issues
+        function createPlaceholderTexture(color) {
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 64;
+            const context = canvas.getContext('2d');
+            context.fillStyle = color;
+            context.fillRect(0, 0, 64, 64);
+            
+            // Add some noise for texture
+            context.fillStyle = 'rgba(255,255,255,0.1)';
+            for (let i = 0; i < 100; i++) {
+                const x = Math.random() * 64;
+                const y = Math.random() * 64;
+                const size = Math.random() * 3 + 1;
+                context.fillRect(x, y, size, size);
+            }
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }
+        
+        // Create materials with placeholder textures
+        const materials = {
+            wood: new THREE.MeshStandardMaterial({ 
+                color: 0x8B4513, 
+                roughness: 0.7,
+                metalness: 0.1,
+                map: createPlaceholderTexture('#8B4513')
+            }),
+            stone: new THREE.MeshStandardMaterial({ 
+                color: 0x808080, 
+                roughness: 0.8,
+                metalness: 0.1,
+                map: createPlaceholderTexture('#808080') 
+            }),
+            floor: new THREE.MeshStandardMaterial({ 
+                color: 0x654321, 
+                roughness: 0.9,
+                metalness: 0,
+                map: createPlaceholderTexture('#654321')
+            }),
+            frame: new THREE.MeshStandardMaterial({ 
+                color: 0x4d2600, 
+                roughness: 0.6,
+                metalness: 0.2,
+                map: createPlaceholderTexture('#4d2600')
+            })
+        };
+        
+        // Museum dimensions
+        const museumWidth = 20;
+        const museumHeight = 12;
+        const museumDepth = 30;
+        const floorHeight = 6;
+        
+        // Objects for collision detection
+        const walls = [];
+        const collidableObjects = [];
+        const interactableObjects = [];
+        
+        // Create a cube helper function
+        function createCube(width, height, depth, material, x, y, z, castShadow = true) {
+            const geometry = new THREE.BoxGeometry(width, height, depth);
+            const cube = new THREE.Mesh(geometry, material);
+            cube.position.set(x, y, z);
+            cube.castShadow = castShadow;
+            cube.receiveShadow = true;
+            scene.add(cube);
+            return cube;
+        }
+        
+        // Build museum
+        function buildMuseum() {
+            // Floor
+            createCube(museumWidth, 1, museumDepth, materials.floor, 0, -0.5, 0);
+            
+            // Ground floor walls
+            createCube(museumWidth, floorHeight, 1, materials.stone, 0, floorHeight/2, -museumDepth/2);
+            createCube(museumWidth, floorHeight, 1, materials.stone, 0, floorHeight/2, museumDepth/2);
+            createCube(1, floorHeight, museumDepth, materials.stone, -museumWidth/2, floorHeight/2, 0);
+            createCube(1, floorHeight, museumDepth, materials.stone, museumWidth/2, floorHeight/2, 0);
+            
+            // Second floor
+            createCube(museumWidth, 1, museumDepth, materials.floor, 0, floorHeight, 0);
+            
+            // Second floor walls
+            createCube(museumWidth, floorHeight, 1, materials.stone, 0, floorHeight + floorHeight/2, -museumDepth/2);
+            createCube(museumWidth, floorHeight, 1, materials.stone, 0, floorHeight + floorHeight/2, museumDepth/2);
+            createCube(1, floorHeight, museumDepth, materials.stone, -museumWidth/2, floorHeight + floorHeight/2, 0);
+            createCube(1, floorHeight, museumDepth, materials.stone, museumWidth/2, floorHeight + floorHeight/2, 0);
+            
+            // Roof
+            createCube(museumWidth, 1, museumDepth, materials.wood, 0, museumHeight, 0);
+            
+            // Collision walls
+            walls.push(
+                // Outer boundaries
+                { minX: -museumWidth/2, maxX: museumWidth/2, minZ: -museumDepth/2, maxZ: -museumDepth/2 + 1 }, // North
+                { minX: -museumWidth/2, maxX: museumWidth/2, minZ: museumDepth/2 - 1, maxZ: museumDepth/2 }, // South
+                { minX: -museumWidth/2, maxX: -museumWidth/2 + 1, minZ: -museumDepth/2, maxZ: museumDepth/2 }, // West
+                { minX: museumWidth/2 - 1, maxX: museumWidth/2, minZ: -museumDepth/2, maxZ: museumDepth/2 }  // East
+            );
+            
+            // Stairs
+            createStairs();
+        }
+        
+        // Create stairs
+        function createStairs() {
+            const stairsWidth = 4;
+            const stepsCount = 12;
+            const stepHeight = floorHeight / stepsCount;
+            const stepDepth = 1;
+            
+            for (let i = 0; i < stepsCount; i++) {
+                createCube(
+                    stairsWidth,
+                    stepHeight,
+                    stepDepth,
+                    materials.wood,
+                    -museumWidth/4,
+                    i * stepHeight,
+                    -museumDepth/4 + i * stepDepth
+                );
+                
+                // Add collision for each step
+                collidableObjects.push({
+                    minX: -museumWidth/4 - stairsWidth/2,
+                    maxX: -museumWidth/4 + stairsWidth/2,
+                    minZ: -museumDepth/4 + i * stepDepth - stepDepth/2,
+                    maxZ: -museumDepth/4 + i * stepDepth + stepDepth/2,
+                    y: i * stepHeight + stepHeight,
+                    type: 'stair'
+                });
+            }
+            
+            // Add railings
+            for (let i = 0; i < stepsCount; i += 2) {
+                createCube(
+                    0.2,
+                    1,
+                    0.2,
+                    materials.wood,
+                    -museumWidth/4 - stairsWidth/2 + 0.2,
+                    i * stepHeight + 0.5,
+                    -museumDepth/4 + i * stepDepth
+                );
+                
+                createCube(
+                    0.2,
+                    1,
+                    0.2,
+                    materials.wood,
+                    -museumWidth/4 + stairsWidth/2 - 0.2,
+                    i * stepHeight + 0.5,
+                    -museumDepth/4 + i * stepDepth
+                );
+            }
+        }
+        
+        // Create lights
+        function setupLights() {
+            // Ambient light
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.7);
+            scene.add(ambientLight);
+            
+            // Main directional light
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 10);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            scene.add(directionalLight);
+            
+            // Add some point lights
+            const light1 = new THREE.PointLight(0xffffcc, 0.8, 20);
+            light1.position.set(0, floorHeight - 1, 0);
+            scene.add(light1);
+            
+            const light2 = new THREE.PointLight(0xffffcc, 0.8, 20);
+            light2.position.set(0, museumHeight - 1, 0);
+            scene.add(light2);
+        }
+        
+        // Create a framed image with error handling
+        function createFramedImage(imageUrl, x, y, z, rotationY, width = 3, height = 2, title = "Untitled", description = "") {
+            // Frame
+            const frameWidth = width + 0.2;
+            const frameHeight = height + 0.2;
+            const frameDepth = 0.1;
+            
+            const frame = createCube(
+                frameWidth,
+                frameHeight,
+                frameDepth,
+                materials.frame,
+                x,
+                y,
+                z
+            );
+            frame.rotation.y = rotationY;
+            
+            // Create default canvas for error cases
+            const defaultCanvas = document.createElement('canvas');
+            defaultCanvas.width = 256;
+            defaultCanvas.height = 256;
+            const ctx = defaultCanvas.getContext('2d');
+            
+            // Gray background
+            ctx.fillStyle = '#AAAAAA';
+            ctx.fillRect(0, 0, 256, 256);
+            
+            // Title text
+            ctx.fillStyle = '#000000';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(title, 128, 128);
+            
+            // Create default texture
+            const defaultTexture = new THREE.CanvasTexture(defaultCanvas);
+            
+            // Create image material with default texture
+            const imageMaterial = new THREE.MeshBasicMaterial({ map: defaultTexture });
+            const imageGeometry = new THREE.PlaneGeometry(width, height);
+            const image = new THREE.Mesh(imageGeometry, imageMaterial);
+            
+            // Position slightly in front of the frame
+            image.position.set(x, y, z + frameDepth/2 + 0.01);
+            image.rotation.y = rotationY;
+            scene.add(image);
+            
+            // Add to interactable objects
+            interactableObjects.push({
+                object: image,
+                title: title,
+                description: description
+            });
+            
+            // Try to load the real image
+            const textureLoader = new THREE.TextureLoader();
+            textureLoader.load(
+                imageUrl,
+                // Success callback
+                (texture) => {
+                    imageMaterial.map = texture;
+                    imageMaterial.needsUpdate = true;
+                },
+                // Progress callback
+                undefined,
+                // Error callback
+                (error) => {
+                    console.error(`Error loading image: ${imageUrl}`, error);
+                    // Default texture already applied
+                }
+            );
+            
+            // Add collision for the painting
+            const wallOffset = 0.6; // Distance from wall
+            let collisionBox;
+            
+            if (Math.abs(rotationY) < 0.1 || Math.abs(rotationY - Math.PI) < 0.1) {
+                // North/South wall
+                collisionBox = {
+                    minX: x - width/2 - 0.2,
+                    maxX: x + width/2 + 0.2,
+                    minZ: Math.min(z - 0.2, z - wallOffset),
+                    maxZ: Math.max(z + 0.2, z + wallOffset),
+                    type: 'painting'
+                };
+            } else {
+                // East/West wall
+                collisionBox = {
+                    minX: Math.min(x - 0.2, x - wallOffset),
+                    maxX: Math.max(x + 0.2, x + wallOffset),
+                    minZ: z - width/2 - 0.2,
+                    maxZ: z + width/2 + 0.2,
+                    type: 'painting'
+                };
+            }
+            
+            walls.push(collisionBox);
+            
+            return { frame, image };
+        }
+        
+        // Create a chair that can be climbed
+        function createChair(x, y, z) {
+            // Seat
+            createCube(2, 0.5, 2, materials.wood, x, y, z);
+            
+            // Back
+            createCube(2, 2, 0.5, materials.wood, x, y + 1.25, z - 0.75);
+            
+            // Legs
+            createCube(0.4, y, 0.4, materials.wood, x - 0.7, y/2 - 0.25, z - 0.7);
+            createCube(0.4, y, 0.4, materials.wood, x + 0.7, y/2 - 0.25, z - 0.7);
+            createCube(0.4, y, 0.4, materials.wood, x - 0.7, y/2 - 0.25, z + 0.7);
+            createCube(0.4, y, 0.4, materials.wood, x + 0.7, y/2 - 0.25, z + 0.7);
+            
+            // Add chair to collidable objects
+            collidableObjects.push({
+                minX: x - 1,
+                maxX: x + 1,
+                minZ: z - 1,
+                maxZ: z + 1,
+                y: y + 0.25, // Top of the seat
+                type: 'chair'
+            });
+        }
+        
+        // Reliable paintings (using generated fallbacks)
+        const paintingsConfig = [
+            // Ground floor
+            {
+                url: "placeholder", // Will use fallback
+                x: -8,
+                y: 3,
+                z: -museumDepth/2 + 0.6,
+                rotation: 0,
+                title: "Starry Night",
+                description: "Vincent van Gogh, 1889"
+            },
+            {
+                url: "placeholder",
+                x: -3,
+                y: 3,
+                z: -museumDepth/2 + 0.6,
+                rotation: 0,
+                title: "Mona Lisa",
+                description: "Leonardo da Vinci, 1503-1506"
+            },
+            {
+                url: "placeholder",
+                x: 3,
+                y: 3,
+                z: -museumDepth/2 + 0.6,
+                rotation: 0,
+                width: 4,
+                height: 2.5,
+                title: "The Creation of Adam",
+                description: "Michelangelo, 1512"
+            },
+            {
+                url: "placeholder",
+                x: 8,
+                y: 3,
+                z: -museumDepth/2 + 0.6,
+                rotation: 0,
+                title: "The Scream",
+                description: "Edvard Munch, 1893"
+            },
+            
+            // East wall
+            {
+                url: "placeholder",
+                x: museumWidth/2 - 0.6,
+                y: 3,
+                z: -8,
+                rotation: Math.PI/2,
+                width: 4,
+                height: 2.5,
+                title: "The Great Wave off Kanagawa",
+                description: "Hokusai, 1831"
+            },
+            
+            // Second floor
+            {
+                url: "placeholder",
+                x: -6,
+                y: floorHeight + 3,
+                z: -museumDepth/2 + 0.6,
+                rotation: 0,
+                width: 5,
+                height: 3,
+                title: "The Night Watch",
+                description: "Rembrandt, 1642"
+            },
+            {
+                url: "placeholder",
+                x: 0,
+                y: floorHeight + 3,
+                z: -museumDepth/2 + 0.6,
+                rotation: 0,
+                title: "Girl with a Pearl Earring",
+                description: "Johannes Vermeer, 1665"
+            },
+            {
+                url: "placeholder",
+                x: 6,
+                y: floorHeight + 3,
+                z: -museumDepth/2 + 0.6,
+                rotation: 0,
+                title: "American Gothic",
+                description: "Grant Wood, 1930"
+            }
+        ];
+        
+        // Player controls - improved for smooth movement
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+        const moveDirection = new THREE.Vector3();
+        
+        let moveForward = false;
+        let moveBackward = false;
+        let moveLeft = false;
+        let moveRight = false;
+        let isRunning = false;
+        let canJump = true;
+        
+        let moveSpeed = 8.0;
+        let runMultiplier = 1.8;
+        let playerHeight = 1.8;
+        let playerRadius = 0.5;
+        
+        // Physics
+        const gravity = 20.0;
+        let prevTime = performance.now();
+        
+        // Input handling
+        const onKeyDown = function(event) {
+            switch(event.code) {
+                case 'KeyW': moveForward = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyA': moveLeft = true; break;
+                case 'KeyD': moveRight = true; break;
+                case 'ShiftLeft': 
+                case 'ShiftRight': 
+                    isRunning = true; 
+                    break;
+                case 'Space': 
+                    if (canJump) {
+                        velocity.y = 8;
+                        canJump = false;
+                    }
+                    break;
+            }
+        };
+        
+        const onKeyUp = function(event) {
+            switch(event.code) {
+                case 'KeyW': moveForward = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyA': moveLeft = false; break;
+                case 'KeyD': moveRight = false; break;
+                case 'ShiftLeft': 
+                case 'ShiftRight': 
+                    isRunning = false; 
+                    break;
+            }
+        };
+        
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('keyup', onKeyUp);
+        
+        // FPS camera controls - fixed for smoother movement
+        const pitchObject = new THREE.Object3D();
+        const yawObject = new THREE.Object3D();
+        
+        pitchObject.add(camera);
+        yawObject.add(pitchObject);
+        scene.add(yawObject);
+        
+        let isLocked = false;
+        
+        document.addEventListener('click', () => {
+            document.body.requestPointerLock();
+        });
+        
+        document.addEventListener('pointerlockchange', () => {
+            isLocked = document.pointerLockElement === document.body;
+            if (isLocked) {
+                document.getElementById('instructions').style.opacity = '0.5';
+            } else {
+                document.getElementById('instructions').style.opacity = '1';
+            }
+        });
+        
+        document.addEventListener('mousemove', (event) => {
+            if (isLocked) {
+                const movementX = event.movementX || 0;
+                const movementY = event.movementY || 0;
+                
+                yawObject.rotation.y -= movementX * 0.002;
+                pitchObject.rotation.x -= movementY * 0.002;
+                pitchObject.rotation.x = Math.max(-Math.PI/2 + 0.01, Math.min(Math.PI/2 - 0.01, pitchObject.rotation.x));
+            }
+        });
+        
+        // Check collision with walls and objects - improved for better detection
+        function checkCollision(position, playerRadius) {
+            // Check collision with walls
+            for (const wall of walls) {
+                if (position.x + playerRadius > wall.minX && 
+                    position.x - playerRadius < wall.maxX &&
+                    position.z + playerRadius > wall.minZ && 
+                    position.z - playerRadius < wall.maxZ) {
+                    
+                    // Determine the correction direction (which side to push out from)
+                    const overlapX1 = position.x + playerRadius - wall.minX;
+                    const overlapX2 = wall.maxX - (position.x - playerRadius);
+                    const overlapZ1 = position.z + playerRadius - wall.minZ;
+                    const overlapZ2 = wall.maxZ - (position.z - playerRadius);
+                    
+                    // Find the smallest overlap
+                    const minOverlap = Math.min(overlapX1, overlapX2, overlapZ1, overlapZ2);
+                    
+                    // Push player in the direction of smallest overlap
+                    if (minOverlap === overlapX1) position.x = wall.minX - playerRadius;
+                    else if (minOverlap === overlapX2) position.x = wall.maxX + playerRadius;
+                    else if (minOverlap === overlapZ1) position.z = wall.minZ - playerRadius;
+                    else if (minOverlap === overlapZ2) position.z = wall.maxZ + playerRadius;
+                    
+                    return true;
+                }
+            }
+            
+            // Check museum boundaries
+            if (position.x > museumWidth/2 - playerRadius) position.x = museumWidth/2 - playerRadius;
+            if (position.x < -museumWidth/2 + playerRadius) position.x = -museumWidth/2 + playerRadius;
+            if (position.z > museumDepth/2 - playerRadius) position.z = museumDepth/2 - playerRadius;
+            if (position.z < -museumDepth/2 + playerRadius) position.z = -museumDepth/2 + playerRadius;
+            
+            return false;
+        }
+        
+        // Climb stairs and chairs
+        function checkClimbable(position) {
+            // Check chair and stair collisions for climbing
+            for (const obj of collidableObjects) {
+                if (obj.type === 'chair' || obj.type === 'stair') {
+                    if (position.x >= obj.minX && position.x <= obj.maxX &&
+                        position.z >= obj.minZ && position.z <= obj.maxZ &&
+                        yawObject.position.y < obj.y + 0.1 && 
+                        yawObject.position.y > obj.y - 0.5) {
+                        // On top of chair or stair
+                        yawObject.position.y = obj.y;
+                        velocity.y = 0;
+                        canJump = true;
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        
+        // Check what painting player is looking at
+        function checkPaintingInteraction() {
+            // Create raycaster
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            
+            // Get intersections
+            const intersects = raycaster.intersectObjects(
+                interactableObjects.map(obj => obj.object)
+            );
+            
+            if (intersects.length > 0 && intersects[0].distance < 5) {
+                const object = intersects[0].object;
+                
+                // Find the corresponding info
+                for (const item of interactableObjects) {
+                    if (item.object === object) {
+                        // Display info
+                        const infoElement = document.getElementById('roomInfo');
+                        infoElement.innerHTML = `<strong>${item.title}</strong><br>${item.description}`;
+                        infoElement.style.opacity = '1';
+                        return;
+                    }
+                }
+            } else {
+                document.getElementById('roomInfo').style.opacity = '0';
+            }
+        }
+        
+        // Animation loop with improved movement
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (isLocked) {
+                const time = performance.now();
+                const delta = Math.min(0.1, (time - prevTime) / 1000); // Cap delta for consistent movement
+                
+                // Apply friction
+                velocity.x -= velocity.x * 8.0 * delta;
+                velocity.z -= velocity.z * 8.0 * delta;
+                
+                // Apply gravity
+                velocity.y -= gravity * delta;
+                
+                // Calculate movement direction in world space
+                const currentSpeed = isRunning ? moveSpeed * runMultiplier : moveSpeed;
+                
+                // Reset direction
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                
+                // Normalize diagonal movement
+                if (direction.length() > 0) {
+                    direction.normalize();
+                }
+                
+                // Apply speed
+                moveDirection.set(0, 0, 0);
+                
+                if (moveForward || moveBackward) moveDirection.z = -direction.z * currentSpeed;
+                if (moveLeft || moveRight) moveDirection.x = -direction.x * currentSpeed;
+                
+                // Rotate movement direction by camera yaw
+                if (moveDirection.length() > 0) {
+                    const rotateY = new THREE.Matrix4().makeRotationY(yawObject.rotation.y);
+                    moveDirection.applyMatrix4(rotateY);
+                    
+                    // Set velocity from direction
+                    velocity.x = moveDirection.x;
+                    velocity.z = moveDirection.z;
+                }
+                
+                // Calculate next position
+                const nextPosition = yawObject.position.clone();
+                nextPosition.x += velocity.x * delta;
+                nextPosition.z += velocity.z * delta;
+                
+                // Check wall collisions
+                checkCollision(nextPosition, playerRadius);
+                
+                // Update position
+                yawObject.position.x = nextPosition.x;
+                yawObject.position.z = nextPosition.z;
+                yawObject.position.y += velocity.y * delta;
+                
+                // Check for climbable objects
+                checkClimbable(yawObject.position);
+                
+                // Floor collision (ground floor)
+                if (yawObject.position.y < playerHeight) {
+                    velocity.y = 0;
+                    yawObject.position.y = playerHeight;
+                    canJump = true;
+                }
+                
+                // Floor collision (second floor)
+                if (yawObject.position.y > floorHeight - 0.5 && 
+                    yawObject.position.y < floorHeight + 0.5 && 
+                    velocity.y < 0) {
+                    velocity.y = 0;
+                    yawObject.position.y = floorHeight;
+                    canJump = true;
+                }
+                
+                // Ceiling collision
+                if (yawObject.position.y > museumHeight - 0.5) {
+                    velocity.y = 0;
+                    yawObject.position.y = museumHeight - 0.5;
+                }
+                
+                // Check painting interactions
+                checkPaintingInteraction();
+            }
+            
+            renderer.render(scene, camera);
+            prevTime = time;
+        }
+        
+        // Window resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Initialize everything
+        function init() {
+            buildMuseum();
+            setupLights();
+            
+            // Add chairs for climbing
+            createChair(-5, 0.5, -5);
+            createChair(5, 0.5, -5);
+            createChair(0, 0.5, 8);
+            createChair(-5, floorHeight + 0.5, -5);
+            
+            // Create paintings
+            paintingsConfig.forEach(painting => {
+                createFramedImage(
+                    painting.url,
+                    painting.x,
+                    painting.y,
+                    painting.z,
+                    painting.rotation,
+                    painting.width || 3,
+                    painting.height || 2,
+                    painting.title,
+                    painting.description
+                );
+            });
+            
+            // Set initial position
+            yawObject.position.set(0, playerHeight, museumDepth/2 - 5);
+            
+            // Hide loading screen
+            document.getElementById('loading').style.display = 'none';
+            
+            // Start animation
+            animate();
+        }
+        
+        // Start everything
+        init();
+    </script>
+</body>
+</html>

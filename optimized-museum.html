@@ -1,0 +1,1144 @@
+Here's an improved and optimized version of the 3D virtual art museum with multiple rooms:
+
+```html:optimized-museum.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced 3D Virtual Art Museum</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; }
+        canvas { display: block; }
+        #instructions {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            z-index: 100;
+            max-width: 300px;
+        }
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            z-index: 200;
+        }
+        #loadingBar {
+            width: 300px;
+            height: 10px;
+            background: #333;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        #loadingProgress {
+            height: 100%;
+            width: 0%;
+            background: #0088ff;
+            border-radius: 5px;
+            transition: width 0.3s;
+        }
+        #roomInfo {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            transition: opacity 0.5s;
+            opacity: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <h2>Loading 3D Art Museum...</h2>
+        <div id="loadingBar"><div id="loadingProgress"></div></div>
+    </div>
+    <div id="instructions">
+        <h3>3D Virtual Art Museum</h3>
+        <p>Click to start<br>WASD to move<br>Mouse to look around<br>SHIFT to run<br>SPACE to jump<br>M to toggle map</p>
+    </div>
+    <div id="roomInfo"></div>
+    <script type="module">
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js';
+        
+        // Performance monitoring
+        const stats = {
+            fps: 0,
+            frameTime: 0,
+            frames: 0,
+            prevTime: performance.now()
+        };
+
+        // Scene setup with optimized parameters
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+        scene.fog = new THREE.Fog(0x000000, 15, 30); // Add fog for distance culling
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50);
+        
+        const renderer = new THREE.WebGLRenderer({ 
+            antialias: true,
+            powerPreference: "high-performance"
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel ratio for performance
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // Texture loader with manager for loading progress
+        const loadManager = new THREE.LoadingManager();
+        let totalItems = 0;
+        let loadedItems = 0;
+        
+        loadManager.onStart = function(url, itemsLoaded, itemsTotal) {
+            totalItems = itemsTotal;
+        };
+        
+        loadManager.onLoad = function() {
+            document.getElementById('loading').style.display = 'none';
+        };
+        
+        loadManager.onProgress = function(url, itemsLoaded, itemsTotal) {
+            loadedItems = itemsLoaded;
+            const progress = (itemsLoaded / itemsTotal) * 100;
+            document.getElementById('loadingProgress').style.width = progress + '%';
+        };
+        
+        const textureLoader = new THREE.TextureLoader(loadManager);
+
+        // Materials cache for optimization
+        const materialCache = {
+            wood: new THREE.MeshStandardMaterial({ 
+                color: 0x8b4513, 
+                roughness: 0.7,
+                metalness: 0.2
+            }),
+            modernWood: new THREE.MeshStandardMaterial({
+                color: 0xd2b48c,
+                roughness: 0.5,
+                metalness: 0.1
+            }),
+            floor: new THREE.MeshStandardMaterial({
+                color: 0x808080,
+                roughness: 0.8,
+                metalness: 0.1
+            }),
+            marble: new THREE.MeshStandardMaterial({
+                color: 0xf5f5f5,
+                roughness: 0.1,
+                metalness: 0.2
+            }),
+            wall: new THREE.MeshStandardMaterial({
+                color: 0xeeeeee,
+                roughness: 0.9,
+                metalness: 0
+            })
+        };
+
+        // Load common textures
+        textureLoader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/textures/floors/FloorsCheckerboard_S_Diffuse.jpg', function(texture) {
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(4, 4);
+            materialCache.floor.map = texture;
+            materialCache.floor.needsUpdate = true;
+        });
+
+        textureLoader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/textures/hardwood2_diffuse.jpg', function(texture) {
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(4, 4);
+            materialCache.wood.map = texture;
+            materialCache.wood.needsUpdate = true;
+        });
+
+        // Lights with optimization
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+        scene.add(ambientLight);
+
+        // Optimized lighting system with fewer lights
+        function createRoomLights(roomCenter, roomSize) {
+            // Single main directional light for the entire museum
+            if (!scene.getObjectByName('mainDirectionalLight')) {
+                const mainLight = new THREE.DirectionalLight(0xffffff, 0.6);
+                mainLight.position.set(0, 10, 0);
+                mainLight.name = 'mainDirectionalLight';
+                
+                // Optimize shadow map
+                mainLight.castShadow = true;
+                mainLight.shadow.mapSize.width = 1024;
+                mainLight.shadow.mapSize.height = 1024;
+                mainLight.shadow.camera.near = 0.5;
+                mainLight.shadow.camera.far = 50;
+                mainLight.shadow.camera.left = -20;
+                mainLight.shadow.camera.right = 20;
+                mainLight.shadow.camera.top = 20;
+                mainLight.shadow.camera.bottom = -20;
+                
+                scene.add(mainLight);
+            }
+            
+            // Create room light
+            const roomLight = new THREE.PointLight(0xfcf3d9, 0.8, roomSize.z, 1);
+            roomLight.position.set(
+                roomCenter.x,
+                roomSize.y - 1,
+                roomCenter.z
+            );
+            scene.add(roomLight);
+            
+            return roomLight;
+        }
+
+        // More efficient spotlight creation
+        function createSpotlight(x, y, z, targetX, targetY, targetZ) {
+            const spotlight = new THREE.SpotLight(0xffffff, 0.8);
+            spotlight.position.set(x, y, z);
+            spotlight.target.position.set(targetX, targetY, targetZ);
+            spotlight.angle = Math.PI / 8;
+            spotlight.penumbra = 0.5;
+            spotlight.decay = 1.5;
+            spotlight.distance = 15;
+            
+            // Optimize shadows - only cast for important spotlights
+            if (Math.random() > 0.5) {  // Only 50% of spotlights cast shadows
+                spotlight.castShadow = true;
+                spotlight.shadow.mapSize.width = 512;
+                spotlight.shadow.mapSize.height = 512;
+            }
+            
+            scene.add(spotlight);
+            scene.add(spotlight.target);
+            return spotlight;
+        }
+
+        // Museum layout
+        const rooms = [
+            {
+                name: "Renaissance Gallery",
+                center: { x: 0, y: 0, z: 0 },
+                size: { x: 20, y: 10, z: 30 },
+                wallColor: 0xf0e6d2,
+                floorMaterial: materialCache.marble,
+                description: "Italian Renaissance masterpieces from the 15th-16th centuries."
+            },
+            {
+                name: "Impressionist Collection",
+                center: { x: 30, y: 0, z: 0 },
+                size: { x: 20, y: 10, z: 30 },
+                wallColor: 0xe0f0e9,
+                floorMaterial: materialCache.floor,
+                description: "19th century Impressionist and Post-Impressionist works."
+            },
+            {
+                name: "Modern Art Wing",
+                center: { x: 0, y: 0, z: 40 },
+                size: { x: 25, y: 12, z: 25 },
+                wallColor: 0xffffff,
+                floorMaterial: materialCache.floor,
+                description: "20th century modern art movements including Cubism and Abstract Expressionism."
+            },
+            {
+                name: "Contemporary Gallery",
+                center: { x: 35, y: 0, z: 40 },
+                size: { x: 20, y: 10, z: 25 },
+                wallColor: 0xfafafa,
+                floorMaterial: materialCache.marble,
+                description: "Cutting-edge contemporary works from the 21st century."
+            }
+        ];
+
+        // Corridors connecting rooms
+        const corridors = [
+            {
+                start: { room: 0, wall: 'east' },
+                end: { room: 1, wall: 'west' },
+                width: 6,
+                height: 8
+            },
+            {
+                start: { room: 0, wall: 'north' },
+                end: { room: 2, wall: 'south' },
+                width: 6,
+                height: 8
+            },
+            {
+                start: { room: 1, wall: 'north' },
+                end: { room: 3, wall: 'south' },
+                width: 6,
+                height: 8
+            },
+            {
+                start: { room: 2, wall: 'east' },
+                end: { room: 3, wall: 'west' },
+                width: 6,
+                height: 8
+            }
+        ];
+
+        // Function to create a room
+        function createRoom(roomConfig) {
+            const { center, size, wallColor, floorMaterial, name } = roomConfig;
+            const roomGroup = new THREE.Group();
+            roomGroup.name = name;
+            
+            // Walls
+            const wallMaterial = new THREE.MeshStandardMaterial({
+                color: wallColor,
+                roughness: 0.9,
+                side: THREE.BackSide
+            });
+            
+            const roomGeometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+            const room = new THREE.Mesh(roomGeometry, wallMaterial);
+            room.position.set(center.x, center.y + size.y/2, center.z);
+            room.name = 'walls';
+            roomGroup.add(room);
+            
+            // Floor
+            const floorGeometry = new THREE.PlaneGeometry(size.x, size.z);
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set(center.x, 0.01, center.z); // Slightly above to prevent z-fighting
+            floor.receiveShadow = true;
+            floor.name = 'floor';
+            roomGroup.add(floor);
+            
+            // Add room lighting
+            const roomLight = createRoomLights(center, size);
+            roomGroup.add(roomLight);
+            
+            scene.add(roomGroup);
+            return roomGroup;
+        }
+
+        // Function to create a corridor between rooms
+        function createCorridor(corridor, rooms) {
+            const startRoom = rooms[corridor.start.room];
+            const endRoom = rooms[corridor.end.room];
+            
+            let startPos = { ...startRoom.center };
+            let endPos = { ...endRoom.center };
+            
+            // Adjust positions based on which wall the corridor connects to
+            const startSize = startRoom.size;
+            const endSize = endRoom.size;
+            
+            // Calculate start position
+            if (corridor.start.wall === 'north') startPos.z += startSize.z/2;
+            else if (corridor.start.wall === 'south') startPos.z -= startSize.z/2;
+            else if (corridor.start.wall === 'east') startPos.x += startSize.x/2;
+            else if (corridor.start.wall === 'west') startPos.x -= startSize.x/2;
+            
+            // Calculate end position
+            if (corridor.end.wall === 'north') endPos.z += endSize.z/2;
+            else if (corridor.end.wall === 'south') endPos.z -= endSize.z/2;
+            else if (corridor.end.wall === 'east') endPos.x += endSize.x/2;
+            else if (corridor.end.wall === 'west') endPos.x -= endSize.x/2;
+            
+            // Calculate corridor dimensions
+            const length = Math.sqrt(
+                Math.pow(endPos.x - startPos.x, 2) + 
+                Math.pow(endPos.z - startPos.z, 2)
+            );
+            
+            // Create corridor
+            const corridorGroup = new THREE.Group();
+            
+            // Create corridor walls
+            const wallMaterial = new THREE.MeshStandardMaterial({
+                color: 0xeeeeee,
+                roughness: 0.9
+            });
+            
+            // Determine orientation
+            const isHorizontal = Math.abs(endPos.x - startPos.x) > Math.abs(endPos.z - startPos.z);
+            
+            let corridorGeometry;
+            if (isHorizontal) {
+                corridorGeometry = new THREE.BoxGeometry(length, corridor.height, corridor.width);
+            } else {
+                corridorGeometry = new THREE.BoxGeometry(corridor.width, corridor.height, length);
+            }
+            
+            const corridorWalls = new THREE.Mesh(corridorGeometry, wallMaterial);
+            
+            // Position corridor between rooms
+            const midX = (startPos.x + endPos.x) / 2;
+            const midZ = (startPos.z + endPos.z) / 2;
+            corridorWalls.position.set(midX, corridor.height/2, midZ);
+            
+            // Rotate to connect the rooms
+            if (isHorizontal) {
+                corridorWalls.rotation.y = Math.atan2(endPos.z - startPos.z, endPos.x - startPos.x);
+            } else {
+                corridorWalls.rotation.y = Math.atan2(endPos.z - startPos.z, endPos.x - startPos.x);
+            }
+            
+            corridorGroup.add(corridorWalls);
+            
+            // Floor
+            const floorMaterial = materialCache.floor;
+            let floorGeometry;
+            
+            if (isHorizontal) {
+                floorGeometry = new THREE.PlaneGeometry(length, corridor.width);
+            } else {
+                floorGeometry = new THREE.PlaneGeometry(corridor.width, length);
+            }
+            
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set(midX, 0.02, midZ); // Slightly above ground
+            
+            if (isHorizontal) {
+                floor.rotation.y = Math.atan2(endPos.z - startPos.z, endPos.x - startPos.x);
+            } else {
+                floor.rotation.y = Math.atan2(endPos.z - startPos.z, endPos.x - startPos.x);
+            }
+            
+            floor.receiveShadow = true;
+            corridorGroup.add(floor);
+            
+            scene.add(corridorGroup);
+            return corridorGroup;
+        }
+
+        // Function to create a framed painting
+        function createPainting(config) {
+            const { imageUrl, x, y, z, rotationY, width = 4, height = 3, roomName } = config;
+            const paintingGroup = new THREE.Group();
+            paintingGroup.position.set(x, y, z);
+            paintingGroup.rotation.y = rotationY;
+            
+            // Frame with bevel
+            const frameWidth = width + 0.4;
+            const frameHeight = height + 0.4;
+            const frameDepth = 0.1;
+            
+            // Create frame using multiple boxes for detail
+            const frameMaterial = materialCache.wood;
+            
+            // Main frame
+            const frameGeometry = new THREE.BoxGeometry(frameWidth, frameHeight, frameDepth);
+            const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+            frame.castShadow = true;
+            paintingGroup.add(frame);
+            
+            // Inner frame (painting relief)
+            const innerFrame = new THREE.Mesh(
+                new THREE.BoxGeometry(width + 0.2, height + 0.2, frameDepth + 0.01),
+                new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5 })
+            );
+            innerFrame.position.z = 0.01;
+            paintingGroup.add(innerFrame);
+            
+            // Canvas - load texture and create material
+            textureLoader.load(imageUrl, (texture) => {
+                // Use a placeholder color while loading
+                const paintingMaterial = new THREE.MeshBasicMaterial({ map: texture });
+                const paintingGeometry = new THREE.PlaneGeometry(width, height);
+                const painting = new THREE.Mesh(paintingGeometry, paintingMaterial);
+                painting.position.z = frameDepth/2 + 0.02; // Slightly in front
+                paintingGroup.add(painting);
+                
+                // Add interactivity info
+                painting.userData = {
+                    type: 'painting',
+                    title: config.title || 'Untitled',
+                    artist: config.artist || 'Unknown Artist',
+                    year: config.year || '',
+                    description: config.description || ''
+                };
+                
+                interactiveObjects.push(painting);
+            });
+            
+            // Create spotlight only if specified (to reduce light count)
+            if (config.spotlight !== false) {
+                const spotlightOffsetX = Math.sin(rotationY) * 2;
+                const spotlightOffsetZ = Math.cos(rotationY) * 2;
+                
+                const spotlight = createSpotlight(
+                    x - spotlightOffsetX, 
+                    y + 2, 
+                    z - spotlightOffsetZ, 
+                    x, y, z
+                );
+                paintingGroup.add(spotlight);
+            }
+            
+            // Add to the appropriate room group
+            if (roomName) {
+                const roomGroup = scene.getObjectByName(roomName);
+                if (roomGroup) {
+                    roomGroup.add(paintingGroup);
+                } else {
+                    scene.add(paintingGroup);
+                }
+            } else {
+                scene.add(paintingGroup);
+            }
+            
+            return paintingGroup;
+        }
+
+        // Array to track interactive objects
+        const interactiveObjects = [];
+        
+        // Painting collections by room
+        const paintingCollections = {
+            "Renaissance Gallery": [
+                {
+                    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/800px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg",
+                    title: "Mona Lisa",
+                    artist: "Leonardo da Vinci",
+                    year: "c. 1503-1506",
+                    description: "One of the most famous paintings in the world, notable for the subject's enigmatic expression.",
+                    width: 3.5,
+                    height: 5,
+                    position: { x: -7, y: 3, z: -13 },
+                    rotation: 0,
+                    spotlight: true
+                },
+                {
+                    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg/1280px-Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg",
+                    title: "The Creation of Adam",
+                    artist: "Michelangelo",
+                    year: "c. 1508-1512",
+                    description: "Part of the Sistine Chapel ceiling, depicting God giving life to Adam.",
+                    width: 6,
+                    height: 3,
+                    position: { x: 0, y: 3, z: -13 },
+                    rotation: 0,
+                    spotlight: true
+                },
+                {
+                    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f6/Raffaello%2C_sposalizio_della_vergine.jpg/800px-Raffaello%2C_sposalizio_della_vergine.jpg",
+                    title: "The Marriage of the Virgin",
+                    artist: "Raphael",
+                    year: "1504",
+                    description: "One of Raphael's early masterpieces showing classical Renaissance principles.",
+                    position: { x: 7, y: 3, z: -13 },
+                    rotation: 0,
+                    spotlight: false
+                },
+                {
+                    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Botticelli-primavera.jpg/1280px-Botticelli-primavera.jpg",
+                    title: "Primavera (Spring)",
+                    artist: "Sandro Botticelli",
+                    year: "1482",
+                    description: "A masterpiece of Florentine painting in the Early Renaissance.",
+                    width: 5,
+                    height: 3,
+                    position: { x: -9, y: 3, z: 0 },
+                    rotation: Math.PI/2,
+                    spotlight: true
+                }
+            ],
+            "Impressionist Collection": [
+                {
+                    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/1280px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
+                    title: "The Starry Night",
+                    artist: "Vincent van Gogh",
+                    year: "1889",
+                    description: "Painted during his stay at the asylum of Saint-Paul-de-Mausole.",
+                    width: 4.5,
+                    height: 3.5,
+                    position: { x: 30, y: 3, z: -13 },
+                    rotation: 0,
+                    spotlight: true
+                },
+                {
+                    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/21/Claude_Monet%2C_Impression%2C_soleil_levant.jpg/1280px-Claude_Monet%2C_Impression%2C_soleil_levant.jpg",
+                    title: "Impression, Sunrise",
+                    artist: "Claude Monet",
+                    year: "1872",
+                    description: "The painting that gave the Impressionist movement its name.",
+                    position: { x: 23, y: 3, z: -13 },
+                    rotation: 0,
+                    spotlight: false
+                },
+                {
+                    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Pierre-Auguste_Renoir%2C_Le_Moulin_de_la_Galette.jpg/1280px-Pierre-Auguste_Renoir%2C_Le_Moulin_de_la_Galette.jpg",
+                    title: "Bal du moulin de la Galette",
+                    artist: "Pierre-Auguste Renoir",
+                    year: "1876",
+                    description: "Depicts a typical Sunday afternoon at the Moulin de la Galette in Paris.",
+                    width: 5,
+                    height: 3.5,
+                    position: { x: 37, y: 3, z: -13 },
+                    rotation: 0,
+                    spotlight: true
+                }
+            ],
+            "Modern Art Wing": [
+                {
+                    imageUrl: "https://upload.wikimedia.org/wikipedia/en/7/74/PicassoGuernica.jpg",
+                    title: "Guernica",
+                    artist: "Pablo Picasso",
+                    year: "1937",
+                    description: "A powerful anti-war statement and one of Picasso's most famous works.",
+                    width: 6,
+                    height: 3,
+                    position: { x: -10, y: 4, z: 40 },
+                    rotation: Math.PI/2,
+                    spotlight: true
+                },
+                {
+                    imageUrl: "https://upload.wikimedia.org/wikipedia/en/4/4c/Les_Demoiselles_d%27Avignon.jpg",
+                    title: "Les Demoiselles d'Avignon",
+                    artist: "Pablo Picasso",
+                    year: "1907",
+                    description: "A pioneering work of cubism and modern art.",
+                    position: { x: 0, y: 4, z: 26 },
+                    rotation: Math.PI,
+                    spotlight: false
+                },
+                {
+                    imageUrl: "https://upload.wikimedia.org/wikipedia/en/e/ee/The_Persistence_of_Memory.jpg",
+                    title: "The Persistence of Memory",
+                    artist: "Salvador Dalí",
+                    year: "1931",
+                    description: "Famous surrealist work featuring melting clocks in a dreamlike landscape.",
+                    width: 4,
+                    height: 3,
+                    position: { x: 0, y: 3, z: 52 },
+                    rotation: Math.PI,
+                    spotlight: true
+                }
+            ],
+            "Contemporary Gallery": [
+                {
+                    imageUrl: "https://upload.wikimedia.org/wikipedia/en/d/de/Campbell%27s_Soup_Cans_MOMA.jpg",
+                    title: "Campbell's Soup Cans",
+                    artist: "Andy Warhol",
+                    year: "1962",
+                    description: "A landmark in pop art, consisting of 32 canvases of Campbell's soup cans.",
+                    width: 3,
+                    height: 4,
+                    position: { x: 35, y: 3, z: 52 },
+                    rotation: Math.PI,
+                    spotlight: true
+                },
+                {
+                    imageUrl: "https://upload.wikimedia.org/wikipedia/en/f/f0/Nighthawks_by_Edward_Hopper_1942.jpg",
+                    title: "Nighthawks",
+                    artist: "Edward Hopper",
+                    year: "1942",
+                    description: "Depicts customers at an all-night diner, capturing American urban loneliness.",
+                    width: 5,
+                    height: 3,
+                    position: { x: 29, y: 3, z: 40 },
+                    rotation: Math.PI/2,
+                    spotlight: false
+                },
+                {
+                    imageUrl: "https://upload.wikimedia.org/wikipedia/en/9/9d/Untitled%28skull%29.jpg",
+                    title: "Untitled (Skull)",
+                    artist: "Jean-Michel Basquiat",
+                    year: "1981",
+                    description: "One of Basquiat's most iconic works, a primitive, expressionist rendition of a skull.",
+                    width: 3.5,
+                    height: 3.5,
+                    position: { x: 43, y: 3, z: 40 },
+                    rotation: -Math.PI/2,
+                    spotlight: true
+                }
+            ]
+        };
+
+        // Create all rooms
+        const roomGroups = rooms.map(room => createRoom(room));
+
+        // Create corridors
+        corridors.forEach(corridor => createCorridor(corridor, rooms));
+
+        // Create paintings in each room
+        Object.entries(paintingCollections).forEach(([roomName, paintings]) => {
+            paintings.forEach(painting => {
+                const room = rooms.find(r => r.name === roomName);
+                if (room) {
+                    const x = room.center.x + painting.position.x;
+                    const y = painting.position.y;
+                    const z = room.center.z + painting.position.z;
+                    
+                    createPainting({
+                        imageUrl: painting.imageUrl,
+                        title: painting.title,
+                        artist: painting.artist,
+                        year: painting.year,
+                        description: painting.description,
+                        x: x,
+                        y: y,
+                        z: z,
+                        rotationY: painting.rotation,
+                        width: painting.width || 4,
+                        height: painting.height || 3,
+                        roomName: roomName,
+                        spotlight: painting.spotlight
+                    });
+                }
+            });
+        });
+
+        // Physics and collision detection
+        const playerHeight = 1.7;
+        const playerRadius = 0.5;
+        const gravity = 9.8;
+        let canJump = true;
+        
+        // Physics variables
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+        let moveSpeed = 8.0;
+        let runMultiplier = 1.6;
+        
+        // Room detection
+        let currentRoom = null;
+        let lastRoomChangeTime = 0;
+        
+        // First-person controls
+        let moveForward = false;
+        let moveBackward = false;
+        let moveLeft = false;
+        let moveRight = false;
+        let isRunning = false;
+        let isJumping = false;
+        
+        let prevTime = performance.now();
+        
+        // Input handling
+        const onKeyDown = function(event) {
+            switch(event.code) {
+                case 'KeyW': moveForward = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyA': moveLeft = true; break;
+                case 'KeyD': moveRight = true; break;
+                case 'ShiftLeft': 
+                case 'ShiftRight': 
+                    isRunning = true; 
+                    break;
+                case 'Space': 
+                    if (canJump) {
+                        velocity.y = 5;
+                        canJump = false;
+                    }
+                    break;
+                case 'KeyM':
+                    toggleMap();
+                    break;
+            }
+        };
+
+        const onKeyUp = function(event) {
+            switch(event.code) {
+                case 'KeyW': moveForward = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyA': moveLeft = false; break;
+                case 'KeyD': moveRight = false; break;
+                case 'ShiftLeft': 
+                case 'ShiftRight': 
+                    isRunning = false; 
+                    break;
+            }
+        };
+
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('keyup', onKeyUp);
+
+        // Mouse look controls
+        let pitch = 0;
+        let yaw = 0;
+        const sensitivity = 0.002;
+        let isLocked = false;
+
+        document.addEventListener('click', () => {
+            document.body.requestPointerLock();
+        });
+
+        document.addEventListener('pointerlockchange', () => {
+            isLocked = document.pointerLockElement === document.body;
+            if (isLocked) {
+                document.getElementById('instructions').style.opacity = '0.5';
+            } else {
+                document.getElementById('instructions').style.opacity = '1';
+            }
+        });
+
+        document.addEventListener('mousemove', (event) => {
+            if (isLocked) {
+                // Smoother mouse look with delta time
+                const movementX = event.movementX || 0;
+                const movementY = event.movementY || 0;
+                
+                yaw -= movementX * sensitivity;
+                pitch -= movementY * sensitivity;
+                pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
+            }
+        });
+
+        // Collision detection
+        function checkWallCollision(position, radius) {
+            // Check if we're about to hit a wall
+            for (const room of rooms) {
+                const roomSize = room.size;
+                const roomCenter = room.center;
+                
+                // Box boundaries
+                const minX = roomCenter.x - roomSize.x / 2;
+                const maxX = roomCenter.x + roomSize.x / 2;
+                const minZ = roomCenter.z - roomSize.z / 2;
+                const maxZ = roomCenter.z + roomSize.z / 2;
+                
+                // Check if inside room bounds (with buffer for radius)
+                if (position.x >= minX + radius && position.x <= maxX - radius &&
+                    position.z >= minZ + radius && position.z <= maxZ - radius) {
+                    // We're inside this room
+                    if (currentRoom !== room.name) {
+                        currentRoom = room.name;
+                        const now = performance.now();
+                        if (now - lastRoomChangeTime > 1000) { // Avoid rapid room changes
+                            displayRoomInfo(room);
+                            lastRoomChangeTime = now;
+                        }
+                    }
+                    return false; // No collision
+                }
+            }
+            
+            // Check corridor bounds
+            for (const corridor of corridors) {
+                const startRoom = rooms[corridor.start.room];
+                const endRoom = rooms[corridor.end.room];
+                
+                let startPos = { ...startRoom.center };
+                let endPos = { ...endRoom.center };
+                
+                // Adjust based on which wall
+                const startSize = startRoom.size;
+                const endSize = endRoom.size;
+                
+                // Calculate corridor endpoints
+                if (corridor.start.wall === 'north') startPos.z += startSize.z/2;
+                else if (corridor.start.wall === 'south') startPos.z -= startSize.z/2;
+                else if (corridor.start.wall === 'east') startPos.x += startSize.x/2;
+                else if (corridor.start.wall === 'west') startPos.x -= startSize.x/2;
+                
+                if (corridor.end.wall === 'north') endPos.z += endSize.z/2;
+                else if (corridor.end.wall === 'south') endPos.z -= endSize.z/2;
+                else if (corridor.end.wall === 'east') endPos.x += endSize.x/2;
+                else if (corridor.end.wall === 'west') endPos.x -= endSize.x/2;
+                
+                // Check if point is inside corridor
+                const dx = endPos.x - startPos.x;
+                const dz = endPos.z - startPos.z;
+                const length = Math.sqrt(dx*dx + dz*dz);
+                
+                // Corridor orientation
+                const angle = Math.atan2(dz, dx);
+                
+                // Corridor width buffer
+                const halfWidth = corridor.width / 2 - radius;
+                
+                // Create local coordinate system
+                const localX = (position.x - startPos.x) * Math.cos(-angle) - (position.z - startPos.z) * Math.sin(-angle);
+                const localZ = (position.x - startPos.x) * Math.sin(-angle) + (position.z - startPos.z) * Math.cos(-angle);
+                
+                // Check if inside corridor bounds
+                if (localX >= 0 && localX <= length && Math.abs(localZ) <= halfWidth) {
+                    return false; // No collision
+                }
+            }
+            
+            return true; // Collision detected
+        }
+        
+        // Display room information
+        function displayRoomInfo(room) {
+            const roomInfo = document.getElementById('roomInfo');
+            roomInfo.textContent = `${room.name}: ${room.description}`;
+            roomInfo.style.opacity = '1';
+            
+            // Fade out after 5 seconds
+            setTimeout(() => {
+                roomInfo.style.opacity = '0';
+            }, 5000);
+        }
+
+        // Create a minimap
+        let mapVisible = false;
+        const minimapSize = 200;
+        const minimapCanvas = document.createElement('canvas');
+        minimapCanvas.width = minimapSize;
+        minimapCanvas.height = minimapSize;
+        minimapCanvas.style.position = 'fixed';
+        minimapCanvas.style.top = '20px';
+        minimapCanvas.style.right = '20px';
+        minimapCanvas.style.background = 'rgba(0,0,0,0.7)';
+        minimapCanvas.style.border = '2px solid white';
+        minimapCanvas.style.borderRadius = '5px';
+        minimapCanvas.style.display = 'none';
+        document.body.appendChild(minimapCanvas);
+        
+        // Toggle minimap
+        function toggleMap() {
+            mapVisible = !mapVisible;
+            minimapCanvas.style.display = mapVisible ? 'block' : 'none';
+        }
+        
+        // Update minimap
+        function updateMinimap() {
+            if (!mapVisible) return;
+            
+            const ctx = minimapCanvas.getContext('2d');
+            ctx.clearRect(0, 0, minimapSize, minimapSize);
+            
+            // Scale factor (museum coordinates to minimap pixels)
+            const scale = minimapSize / 100;
+            const centerX = minimapSize / 2;
+            const centerY = minimapSize / 2;
+            
+            // Draw rooms
+            rooms.forEach(room => {
+                ctx.fillStyle = room.name === currentRoom ? 'rgba(100,255,100,0.5)' : 'rgba(200,200,200,0.3)';
+                
+                const x = (room.center.x * scale) + centerX - (room.size.x * scale / 2);
+                const y = (room.center.z * scale) + centerY - (room.size.z * scale / 2);
+                const width = room.size.x * scale;
+                const height = room.size.z * scale;
+                
+                ctx.fillRect(x, y, width, height);
+                ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+                ctx.strokeRect(x, y, width, height);
+                
+                // Draw room name
+                ctx.fillStyle = 'white';
+                ctx.font = '8px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(room.name, (room.center.x * scale) + centerX, (room.center.z * scale) + centerY);
+            });
+            
+            // Draw corridors
+            ctx.fillStyle = 'rgba(150,150,150,0.5)';
+            ctx.strokeStyle = 'white';
+            
+            corridors.forEach(corridor => {
+                const startRoom = rooms[corridor.start.room];
+                const endRoom = rooms[corridor.end.room];
+                
+                let startPos = { ...startRoom.center };
+                let endPos = { ...endRoom.center };
+                
+                // Calculate endpoints
+                const startSize = startRoom.size;
+                const endSize = endRoom.size;
+                
+                if (corridor.start.wall === 'north') startPos.z += startSize.z/2;
+                else if (corridor.start.wall === 'south') startPos.z -= startSize.z/2;
+                else if (corridor.start.wall === 'east') startPos.x += startSize.x/2;
+                else if (corridor.start.wall === 'west') startPos.x -= startSize.x/2;
+                
+                if (corridor.end.wall === 'north') endPos.z += endSize.z/2;
+                else if (corridor.end.wall === 'south') endPos.z -= endSize.z/2;
+                else if (corridor.end.wall === 'east') endPos.x += endSize.x/2;
+                else if (corridor.end.wall === 'west') endPos.x -= endSize.x/2;
+                
+                const sx = (startPos.x * scale) + centerX;
+                const sy = (startPos.z * scale) + centerY;
+                const ex = (endPos.x * scale) + centerX;
+                const ey = (endPos.z * scale) + centerY;
+                
+                ctx.beginPath();
+                ctx.moveTo(sx, sy);
+                ctx.lineTo(ex, ey);
+                ctx.stroke();
+            });
+            
+            // Draw player position
+            ctx.fillStyle = 'red';
+            ctx.beginPath();
+            ctx.arc(
+                (camera.position.x * scale) + centerX, 
+                (camera.position.z * scale) + centerY, 
+                3, 0, Math.PI * 2
+            );
+            ctx.fill();
+            
+            // Draw player direction
+            const dirX = Math.sin(yaw) * 5;
+            const dirZ = Math.cos(yaw) * 5;
+            
+            ctx.beginPath();
+            ctx.moveTo((camera.position.x * scale) + centerX, (camera.position.z * scale) + centerY);
+            ctx.lineTo(
+                (camera.position.x * scale) + centerX + dirX,
+                (camera.position.z * scale) + centerY + dirZ
+            );
+            ctx.strokeStyle = 'red';
+            ctx.stroke();
+        }
+
+        // Add information display for paintings
+        let currentTarget = null;
+        
+        function checkPaintingInteraction() {
+            // Create raycaster
+            const raycaster = new THREE.Raycaster();
+            const center = new THREE.Vector2(0, 0);
+            
+            raycaster.setFromCamera(center, camera);
+            
+            const intersects = raycaster.intersectObjects(interactiveObjects);
+            
+            if (intersects.length > 0 && intersects[0].distance < 5) {
+                const target = intersects[0].object;
+                
+                if (target !== currentTarget) {
+                    currentTarget = target;
+                    
+                    if (target.userData && target.userData.type === 'painting') {
+                        const info = document.getElementById('roomInfo');
+                        info.innerHTML = `
+                            <strong>${target.userData.title}</strong><br>
+                            ${target.userData.artist}, ${target.userData.year}<br>
+                            ${target.userData.description}
+                        `;
+                        info.style.opacity = '1';
+                    }
+                }
+            } else if (currentTarget) {
+                currentTarget = null;
+                document.getElementById('roomInfo').style.opacity = '0';
+            }
+        }
+
+        // Animation loop with optimized performance
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const time = performance.now();
+            const delta = Math.min(0.1, (time - prevTime) / 1000); // Cap delta time
+            
+            // Performance monitoring
+            stats.frames++;
+            if (time - stats.prevTime >= 1000) {
+                stats.fps = Math.round((stats.frames * 1000) / (time - stats.prevTime));
+                stats.prevTime = time;
+                stats.frames = 0;
+            }
+            
+            if (isLocked) {
+                // Apply camera rotation
+                camera.rotation.x = pitch;
+                camera.rotation.y = yaw;
+                
+                // Apply physics
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+                velocity.y -= gravity * delta; // Apply gravity
+                
+                // Determine movement direction
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize();
+                
+                // Speed based on running
+                const currentSpeed = isRunning ? moveSpeed * runMultiplier : moveSpeed;
+                
+                // Calculate movement
+                if (moveForward || moveBackward) velocity.z -= direction.z * currentSpeed * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * currentSpeed * delta;
+                
+                // Predict next position
+                const moveVector = new THREE.Vector3(
+                    -Math.sin(yaw) * direction.z + Math.cos(yaw) * direction.x,
+                    0,
+                    -Math.cos(yaw) * direction.z - Math.sin(yaw) * direction.x
+                );
+                moveVector.normalize().multiplyScalar(currentSpeed * delta);
+                
+                // Collision prediction
+                const nextPosition = camera.position.clone();
+                nextPosition.x += moveVector.x + velocity.x * delta;
+                nextPosition.z += moveVector.z + velocity.z * delta;
+                
+                const collision = checkWallCollision(nextPosition, playerRadius);
+                
+                if (!collision) {
+                    // Update position if no collision
+                    camera.position.x += moveVector.x + velocity.x * delta;
+                    camera.position.z += moveVector.z + velocity.z * delta;
+                } else {
+                    // Reset horizontal velocity on collision
+                    velocity.x = 0;
+                    velocity.z = 0;
+                }
+                
+                // Update vertical position (jumping/gravity)
+                camera.position.y += velocity.y * delta;
+                
+                // Floor collision
+                if (camera.position.y < playerHeight) {
+                    velocity.y = 0;
+                    camera.position.y = playerHeight;
+                    canJump = true;
+                }
+                
+                // Ceiling collision
+                for (const room of rooms) {
+                    if (camera.position.y > room.size.y - 0.5) {
+                        velocity.y = 0;
+                        camera.position.y = room.size.y - 0.5;
+                    }
+                }
+                
+                // Check for painting interactions
+                checkPaintingInteraction();
+                
+                // Update minimap
+                updateMinimap();
+            }
+            
+            // Perform rendering
+            renderer.render(scene, camera);
+            prevTime = time;
+        }
+
+        // Set initial camera position in first room
+        camera.position.set(rooms[0].center.x, playerHeight, rooms[0].center.z + 5);
+        currentRoom = rooms[0].name;
+        displayRoomInfo(rooms[0]);
+
+        // Handle window resizing
+        window.addEventListener('resize', onWindowResize, false);
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Start animation
+        animate();
+    </script>
+</body>
+</html>

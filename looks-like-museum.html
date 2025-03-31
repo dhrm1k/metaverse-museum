@@ -3,13 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Museum with Paintings</title>
+    <title>Expanded Museum with Multiple Galleries</title>
     <style>
         body { margin: 0; overflow: hidden; }
         canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            border-radius: 5px;
+        }
+        #map {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 150px;
+            height: 150px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
+    <div id="info">Click to interact<br>WASD to move<br>Mouse to look around<br>M to toggle map</div>
+    <canvas id="map"></canvas>
+
     <script type="module">
         import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
 
@@ -18,62 +40,1201 @@
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // Lights
-        const light = new THREE.DirectionalLight(0xffffff, 1);
-        light.position.set(5, 10, 5);
-        scene.add(light);
+        // Museum layout (multiple connected rooms)
+        const rooms = [
+            { 
+                name: "Main Entrance Hall", 
+                width: 20, 
+                height: 10, 
+                depth: 20, 
+                position: { x: 0, y: 0, z: 0 }, 
+                color: 0xaaaaaa,
+                floorColor: 0x444444,
+                ceilingColor: 0xffffff,
+                hasColumns: true
+            },
+            { 
+                name: "Renaissance Gallery", 
+                width: 25, 
+                height: 8, 
+                depth: 20, 
+                position: { x: -30, y: 0, z: 0 }, 
+                color: 0xc8b6a6,
+                floorColor: 0x665544,
+                ceilingColor: 0xeeeedd,
+                hasSkylight: true
+            },
+            { 
+                name: "Modern Art Wing", 
+                width: 25, 
+                height: 12, 
+                depth: 20, 
+                position: { x: 30, y: 0, z: 0 }, 
+                color: 0xb6c8a6,
+                floorColor: 0x333333,
+                ceilingColor: 0xffffff,
+                hasTrackLighting: true
+            },
+            { 
+                name: "Impressionist Gallery", 
+                width: 20, 
+                height: 10, 
+                depth: 20, 
+                position: { x: 0, y: 0, z: -30 }, 
+                color: 0xa6b6c8,
+                floorColor: 0x554433,
+                ceilingColor: 0xeeeeff,
+                hasSkylight: true
+            },
+            { 
+                name: "Photography Exhibition", 
+                width: 15, 
+                height: 8, 
+                depth: 25, 
+                position: { x: 0, y: 0, z: 30 }, 
+                color: 0x999999,
+                floorColor: 0x222222,
+                ceilingColor: 0x333333,
+                hasDarkCeiling: true
+            },
+            { 
+                name: "Sculpture Hall", 
+                width: 20, 
+                height: 15, 
+                depth: 20, 
+                position: { x: -30, y: 0, z: -30 }, 
+                color: 0xd6c6b6,
+                floorColor: 0x776655,
+                ceilingColor: 0xffffee,
+                hasGlassDome: true
+            },
+            { 
+                name: "Contemporary Gallery", 
+                width: 30, 
+                height: 10, 
+                depth: 25, 
+                position: { x: 30, y: 0, z: -30 }, 
+                color: 0xc6d6b6,
+                floorColor: 0x444444,
+                ceilingColor: 0xeeeeee,
+                hasExposedBeams: true
+            },
+            { 
+                name: "Ancient Art Collection", 
+                width: 25, 
+                height: 12, 
+                depth: 20, 
+                position: { x: -30, y: 0, z: 30 }, 
+                color: 0xd6c6a6,
+                floorColor: 0x665544,
+                ceilingColor: 0xeeddcc,
+                hasArches: true
+            },
+            { 
+                name: "Interactive Exhibition", 
+                width: 20, 
+                height: 10, 
+                depth: 20, 
+                position: { x: 30, y: 0, z: 30 }, 
+                color: 0xa6c8c8,
+                floorColor: 0x444455,
+                ceilingColor: 0xccffff,
+                hasLEDCeiling: true
+            }
+        ];
 
-        // Semi-transparent Walls
-        const roomMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0xaaaaaa, 
-            side: THREE.BackSide, 
-            transparent: true, 
-            opacity: 0.5  
-        });
+        // Corridors connecting rooms
+        const corridors = [
+            // Main corridors from entrance hall
+            { from: "Main Entrance Hall", to: "Renaissance Gallery", width: 6, height: 8, position: { x: -15, y: 0, z: 0 }, rotation: 0, length: 10 },
+            { from: "Main Entrance Hall", to: "Modern Art Wing", width: 6, height: 8, position: { x: 15, y: 0, z: 0 }, rotation: 0, length: 10 },
+            { from: "Main Entrance Hall", to: "Impressionist Gallery", width: 6, height: 8, position: { x: 0, y: 0, z: -15 }, rotation: Math.PI/2, length: 10 },
+            { from: "Main Entrance Hall", to: "Photography Exhibition", width: 6, height: 8, position: { x: 0, y: 0, z: 15 }, rotation: Math.PI/2, length: 10 },
+            
+            // Diagonal corridors connecting corners
+            { from: "Renaissance Gallery", to: "Sculpture Hall", width: 5, height: 8, position: { x: -30, y: 0, z: -15 }, rotation: Math.PI/2, length: 10 },
+            { from: "Renaissance Gallery", to: "Ancient Art Collection", width: 5, height: 8, position: { x: -30, y: 0, z: 15 }, rotation: Math.PI/2, length: 10 },
+            { from: "Modern Art Wing", to: "Contemporary Gallery", width: 5, height: 8, position: { x: 30, y: 0, z: -15 }, rotation: Math.PI/2, length: 10 },
+            { from: "Modern Art Wing", to: "Interactive Exhibition", width: 5, height: 8, position: { x: 30, y: 0, z: 15 }, rotation: Math.PI/2, length: 10 },
+            
+            // Additional connecting hallways
+            { from: "Sculpture Hall", to: "Impressionist Gallery", width: 5, height: 8, position: { x: -15, y: 0, z: -30 }, rotation: 0, length: 10 },
+            { from: "Impressionist Gallery", to: "Contemporary Gallery", width: 5, height: 8, position: { x: 15, y: 0, z: -30 }, rotation: 0, length: 10 },
+            { from: "Ancient Art Collection", to: "Photography Exhibition", width: 5, height: 8, position: { x: -15, y: 0, z: 30 }, rotation: 0, length: 10 },
+            { from: "Photography Exhibition", to: "Interactive Exhibition", width: 5, height: 8, position: { x: 15, y: 0, z: 30 }, rotation: 0, length: 10 }
+        ];
 
-        // Museum Room
-        const roomGeometry = new THREE.BoxGeometry(20, 10, 30);
-        const room = new THREE.Mesh(roomGeometry, roomMaterial);
-        scene.add(room);
+        // Boundaries for collision detection
+        const boundaries = [];
 
-        // Floor (Green for Visibility)
-        const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 }); 
-        const floorGeometry = new THREE.PlaneGeometry(20, 30);
-        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-        floor.rotation.x = -Math.PI / 2;
-        scene.add(floor);
+        // Environment lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        scene.add(ambientLight);
 
-        // Grid Helper (Debugging)
-        const gridHelper = new THREE.GridHelper(30, 30);
-        scene.add(gridHelper);
-
-        // Function to Add Paintings on Walls
-        function createPainting(imageURL, x, y, z, rotationY) {
-            const textureLoader = new THREE.TextureLoader();
-            const texture = textureLoader.load(imageURL);
-
-            const paintingMaterial = new THREE.MeshBasicMaterial({ map: texture });
-            const paintingGeometry = new THREE.PlaneGeometry(4, 3); // Painting size
-            const painting = new THREE.Mesh(paintingGeometry, paintingMaterial);
-
-            painting.position.set(x, y, z);
-            painting.rotation.y = rotationY; // Adjust facing direction
-            scene.add(painting);
+        // Function to create ceiling details
+        function createCeiling(room) {
+            const ceilingGeometry = new THREE.PlaneGeometry(room.width, room.depth);
+            const ceilingMaterial = new THREE.MeshStandardMaterial({ 
+                color: room.ceilingColor,
+                side: THREE.DoubleSide
+            });
+            const ceiling = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.set(room.position.x, room.height, room.position.z);
+            ceiling.receiveShadow = true;
+            
+            // Add ceiling details based on room type
+            if (room.hasSkylight) {
+                // Create skylight
+                const skylightSize = Math.min(room.width, room.depth) * 0.4;
+                const skylightGeometry = new THREE.PlaneGeometry(skylightSize, skylightSize);
+                const skylightMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0x88aaff,
+                    transparent: true,
+                    opacity: 0.8,
+                    side: THREE.DoubleSide
+                });
+                const skylight = new THREE.Mesh(skylightGeometry, skylightMaterial);
+                skylight.rotation.x = Math.PI / 2;
+                skylight.position.set(room.position.x, room.height - 0.1, room.position.z);
+                scene.add(skylight);
+                
+                // Add soft light from skylight
+                const skylightLight = new THREE.PointLight(0xaaccff, 0.8, room.height * 2);
+                skylightLight.position.set(room.position.x, room.height - 0.5, room.position.z);
+                skylightLight.castShadow = true;
+                scene.add(skylightLight);
+            }
+            
+            if (room.hasTrackLighting) {
+                // Create track lighting
+                const trackWidth = room.width * 0.7;
+                const trackDepth = room.depth * 0.7;
+                
+                // Create beams
+                const trackMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+                
+                // Horizontal tracks
+                for (let i = -1; i <= 1; i += 2) {
+                    const trackH = new THREE.Mesh(
+                        new THREE.BoxGeometry(trackWidth, 0.2, 0.2),
+                        trackMaterial
+                    );
+                    trackH.position.set(room.position.x, room.height - 0.5, room.position.z + (i * trackDepth/2));
+                    scene.add(trackH);
+                    
+                    // Add lights along track
+                    for (let j = -2; j <= 2; j++) {
+                        const spotLight = new THREE.SpotLight(0xffffff, 0.8, room.height * 2, Math.PI/6, 0.5);
+                        spotLight.position.set(
+                            room.position.x + (j * trackWidth/4),
+                            room.height - 0.7,
+                            room.position.z + (i * trackDepth/2)
+                        );
+                        spotLight.target.position.set(
+                            room.position.x + (j * trackWidth/4),
+                            0,
+                            room.position.z + (i * trackDepth/2)
+                        );
+                        spotLight.castShadow = true;
+                        scene.add(spotLight);
+                        scene.add(spotLight.target);
+                    }
+                }
+                
+                // Vertical tracks
+                for (let i = -1; i <= 1; i += 2) {
+                    const trackV = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.2, 0.2, trackDepth),
+                        trackMaterial
+                    );
+                    trackV.position.set(room.position.x + (i * trackWidth/2), room.height - 0.5, room.position.z);
+                    scene.add(trackV);
+                    
+                    // Add lights along track
+                    for (let j = -2; j <= 2; j++) {
+                        const spotLight = new THREE.SpotLight(0xffffff, 0.8, room.height * 2, Math.PI/6, 0.5);
+                        spotLight.position.set(
+                            room.position.x + (i * trackWidth/2),
+                            room.height - 0.7,
+                            room.position.z + (j * trackDepth/4)
+                        );
+                        spotLight.target.position.set(
+                            room.position.x + (i * trackWidth/2),
+                            0,
+                            room.position.z + (j * trackDepth/4)
+                        );
+                        spotLight.castShadow = true;
+                        scene.add(spotLight);
+                        scene.add(spotLight.target);
+                    }
+                }
+            }
+            
+            if (room.hasGlassDome) {
+                // Create glass dome
+                const domeRadius = Math.min(room.width, room.depth) * 0.3;
+                const domeGeometry = new THREE.SphereGeometry(domeRadius, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+                const domeMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xaaddff,
+                    transparent: true,
+                    opacity: 0.5,
+                    side: THREE.DoubleSide
+                });
+                const dome = new THREE.Mesh(domeGeometry, domeMaterial);
+                dome.position.set(room.position.x, room.height, room.position.z);
+                scene.add(dome);
+                
+                // Add sunlight effect from dome
+                const domeLight = new THREE.PointLight(0xffffcc, 1.5, room.height * 3);
+                domeLight.position.set(room.position.x, room.height - domeRadius/2, room.position.z);
+                domeLight.castShadow = true;
+                scene.add(domeLight);
+            }
+            
+            if (room.hasExposedBeams) {
+                // Create exposed ceiling beams
+                const beamMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
+                
+                // Main beams
+                for (let i = -2; i <= 2; i++) {
+                    const beam = new THREE.Mesh(
+                        new THREE.BoxGeometry(room.width - 1, 0.4, 0.4),
+                        beamMaterial
+                    );
+                    beam.position.set(room.position.x, room.height - 0.2, room.position.z + (i * room.depth/5));
+                    scene.add(beam);
+                }
+                
+                // Cross beams
+                for (let i = -2; i <= 2; i++) {
+                    const beam = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.4, 0.4, room.depth - 1),
+                        beamMaterial
+                    );
+                    beam.position.set(room.position.x + (i * room.width/5), room.height - 0.2, room.position.z);
+                    scene.add(beam);
+                }
+                
+                // Add hanging pendant lights
+                for (let i = -1; i <= 1; i += 2) {
+                    for (let j = -1; j <= 1; j += 2) {
+                        // Light fixture
+                        const fixture = new THREE.Mesh(
+                            new THREE.CylinderGeometry(0.2, 0.4, 0.5, 8),
+                            new THREE.MeshStandardMaterial({ color: 0x333333 })
+                        );
+                        fixture.position.set(
+                            room.position.x + (i * room.width/4),
+                            room.height - 2,
+                            room.position.z + (j * room.depth/4)
+                        );
+                        scene.add(fixture);
+                        
+                        // Hanging rod
+                        const rod = new THREE.Mesh(
+                            new THREE.CylinderGeometry(0.05, 0.05, 2, 8),
+                            new THREE.MeshStandardMaterial({ color: 0x666666 })
+                        );
+                        rod.position.set(
+                            room.position.x + (i * room.width/4),
+                            room.height - 1,
+                            room.position.z + (j * room.depth/4)
+                        );
+                        scene.add(rod);
+                        
+                        // Light
+                        const light = new THREE.PointLight(0xffffcc, 0.8, room.height * 2);
+                        light.position.set(
+                            room.position.x + (i * room.width/4),
+                            room.height - 2.3,
+                            room.position.z + (j * room.depth/4)
+                        );
+                        light.castShadow = true;
+                        scene.add(light);
+                    }
+                }
+            }
+            
+            if (room.hasLEDCeiling) {
+                // Create LED panel grid ceiling
+                const panelSize = 2;
+                const panelsX = Math.floor(room.width / panelSize) - 1;
+                const panelsZ = Math.floor(room.depth / panelSize) - 1;
+                
+                for (let i = 0; i < panelsX; i++) {
+                    for (let j = 0; j < panelsZ; j++) {
+                        const panelX = room.position.x - room.width/2 + panelSize/2 + i * panelSize + panelSize/2;
+                        const panelZ = room.position.z - room.depth/2 + panelSize/2 + j * panelSize + panelSize/2;
+                        
+                        // Panel frame
+                        const frame = new THREE.Mesh(
+                            new THREE.BoxGeometry(panelSize, 0.1, panelSize),
+                            new THREE.MeshStandardMaterial({ color: 0x333333 })
+                        );
+                        frame.position.set(panelX, room.height - 0.1, panelZ);
+                        scene.add(frame);
+                        
+                        // LED panel
+                        const panel = new THREE.Mesh(
+                            new THREE.PlaneGeometry(panelSize - 0.2, panelSize - 0.2),
+                            new THREE.MeshBasicMaterial({ 
+                                color: 0xffffff,
+                                side: THREE.DoubleSide
+                            })
+                        );
+                        panel.rotation.x = Math.PI / 2;
+                        panel.position.set(panelX, room.height - 0.15, panelZ);
+                        scene.add(panel);
+                        
+                        // Light
+                        const light = new THREE.PointLight(
+                            // Random cool white to warm white
+                            new THREE.Color(0.9 + Math.random() * 0.1, 0.9 + Math.random() * 0.1, 0.9 + Math.random() * 0.1),
+                            0.4, 
+                            room.height * 1.5
+                        );
+                        light.position.set(panelX, room.height - 0.3, panelZ);
+                        scene.add(light);
+                    }
+                }
+            }
+            
+            if (room.hasArches) {
+                // Create arched ceiling
+                const archSegments = 8;
+                const archDepth = 0.5;
+                const archRadius = room.height * 0.5;
+                
+                // Create arches along the length
+                for (let i = -2; i <= 2; i++) {
+                    const archPos = room.position.z + (i * room.depth/5);
+                    
+                    for (let j = 0; j <= archSegments; j++) {
+                        const angle = (Math.PI / archSegments) * j;
+                        const x = room.position.x - room.width/2 + j * (room.width / archSegments);
+                        const y = room.height - archRadius + Math.sin(angle) * archRadius;
+                        
+                        const arch = new THREE.Mesh(
+                            new THREE.BoxGeometry(room.width / archSegments, 0.3, archDepth),
+                            new THREE.MeshStandardMaterial({ color: 0xddccbb })
+                        );
+                        arch.position.set(x, y, archPos);
+                        scene.add(arch);
+                    }
+                    
+                    // Add light at the center of each arch
+                    const light = new THREE.PointLight(0xffcc88, 0.6, room.height * 2);
+                    light.position.set(room.position.x, room.height - archRadius/2, archPos);
+                    light.castShadow = true;
+                    scene.add(light);
+                }
+            }
+            
+            if (room.hasDarkCeiling) {
+                // Create track lighting for photography exhibits
+                const spotlights = [];
+                const spotlightPositions = [
+                    { x: -0.3, z: -0.3 },
+                    { x: -0.3, z: 0.3 },
+                    { x: 0.3, z: -0.3 },
+                    { x: 0.3, z: 0.3 }
+                ];
+                
+                spotlightPositions.forEach(pos => {
+                    const x = room.position.x + pos.x * room.width;
+                    const z = room.position.z + pos.z * room.depth;
+                    
+                    // Add track housing
+                    const track = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.3, 0.3, 0.2, 8),
+                        new THREE.MeshStandardMaterial({ color: 0x222222 })
+                    );
+                    track.position.set(x, room.height - 0.2, z);
+                    scene.add(track);
+                    
+                    // Spotlight for each photography panel
+                    const spotlight = new THREE.SpotLight(0xffffff, 1, room.height * 3, Math.PI/6, 0.7);
+                    spotlight.position.set(x, room.height - 0.3, z);
+                    spotlight.target.position.set(x, 0, z);
+                    spotlight.castShadow = true;
+                    scene.add(spotlight);
+                    scene.add(spotlight.target);
+                    spotlights.push(spotlight);
+                });
+                
+                // Animation for spotlights (slowly moving targets)
+                const spotlightTargets = spotlights.map(spotlight => {
+                    return {
+                        spotlight: spotlight,
+                        targetX: Math.random() * room.width - room.width/2 + room.position.x,
+                        targetZ: Math.random() * room.depth - room.depth/2 + room.position.z,
+                        speed: 0.01 + Math.random() * 0.02
+                    };
+                });
+                
+                setInterval(() => {
+                    spotlightTargets.forEach(target => {
+                        // Move each spotlight target gradually
+                        if (Math.random() < 0.01) {
+                            target.targetX = Math.random() * room.width - room.width/2 + room.position.x;
+                            target.targetZ = Math.random() * room.depth - room.depth/2 + room.position.z;
+                        }
+                        
+                        // Smoothly move spotlight target toward random position
+                        const currentX = target.spotlight.target.position.x;
+                        const currentZ = target.spotlight.target.position.z;
+                        
+                        target.spotlight.target.position.x += (target.targetX - currentX) * target.speed;
+                        target.spotlight.target.position.z += (target.targetZ - currentZ) * target.speed;
+                    });
+                }, 50);
+            }
+            
+            if (room.hasColumns) {
+                // Add columns to entrance hall
+                const columnPositions = [
+                    { x: -0.3, z: -0.3 },
+                    { x: -0.3, z: 0.3 },
+                    { x: 0.3, z: -0.3 },
+                    { x: 0.3, z: 0.3 }
+                ];
+                
+                columnPositions.forEach(pos => {
+                    const x = room.position.x + pos.x * room.width * 0.8;
+                    const z = room.position.z + pos.z * room.depth * 0.8;
+                    
+                    // Column base
+                    const base = new THREE.Mesh(
+                        new THREE.BoxGeometry(2, 1, 2),
+                        new THREE.MeshStandardMaterial({ color: 0xdddddd })
+                    );
+                    base.position.set(x, 0.5, z);
+                    scene.add(base);
+                    
+                    // Column shaft
+                    const shaft = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.8, 0.8, room.height - 3, 16),
+                        new THREE.MeshStandardMaterial({ color: 0xeeeeee })
+                    );
+                    shaft.position.set(x, room.height/2, z);
+                    scene.add(shaft);
+                    
+                    // Column capital
+                    const capital = new THREE.Mesh(
+                        new THREE.BoxGeometry(2, 1, 2),
+                        new THREE.MeshStandardMaterial({ color: 0xdddddd })
+                    );
+                    capital.position.set(x, room.height - 1, z);
+                    scene.add(capital);
+                    
+                    // Add light on top of columns
+                    const light = new THREE.PointLight(0xffffcc, 0.5, room.height * 2);
+                    light.position.set(x, room.height - 0.5, z);
+                    light.castShadow = true;
+                    scene.add(light);
+                });
+                
+                // Add central chandelier
+                const chandelier = new THREE.Mesh(
+                    new THREE.CylinderGeometry(2, 2, 0.5, 16),
+                    new THREE.MeshStandardMaterial({ color: 0xddbb66 })
+                );
+                chandelier.position.set(room.position.x, room.height - 2, room.position.z);
+                scene.add(chandelier);
+                
+                // Add central light
+                const centralLight = new THREE.PointLight(0xffffcc, 1, room.height * 3);
+                centralLight.position.set(room.position.x, room.height - 2.5, room.position.z);
+                centralLight.castShadow = true;
+                scene.add(centralLight);
+            }
+            
+            return ceiling;
         }
 
-        // Add Some Paintings
-        createPainting("https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Starry_Night_Over_the_Rhone.jpg/640px-Starry_Night_Over_the_Rhone.jpg", -6, 3, -14, 0);
-        createPainting("https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/640px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg", 6, 3, -14, 0);
-        createPainting("https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/The_Great_Wave_off_Kanagawa.jpg/640px-The_Great_Wave_off_Kanagawa.jpg", 0, 3, -14, 0);
+        // Function to create a room
+        function createRoom(room) {
+            // Room walls
+            const roomMaterial = new THREE.MeshStandardMaterial({
+                color: room.color,
+                side: THREE.BackSide,
+                transparent: false,
+                opacity: 1
+            });
 
-        // FPS Controls (WASD + Mouse Look)
-        let moveSpeed = 0.1;
+            const roomGeometry = new THREE.BoxGeometry(room.width, room.height, room.depth);
+            const roomMesh = new THREE.Mesh(roomGeometry, roomMaterial);
+            roomMesh.position.set(room.position.x, room.position.y + room.height/2, room.position.z);
+            roomMesh.name = room.name;
+            scene.add(roomMesh);
+
+            // Floor
+            const floorGeometry = new THREE.PlaneGeometry(room.width, room.depth);
+            const floorMaterial = new THREE.MeshStandardMaterial({ 
+                color: room.floorColor,
+                roughness: 0.8
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set(room.position.x, 0.01, room.position.z);
+            floor.receiveShadow = true;
+            scene.add(floor);
+            
+            // Create ceiling
+            const ceiling = createCeiling(room);
+
+            // Room light
+            const light = new THREE.PointLight(0xffffcc, 0.6, room.width);
+            light.position.set(room.position.x, room.height - 1, room.position.z);
+            light.castShadow = true;
+            scene.add(light);
+
+            // Add room boundaries for collision detection
+            // Left wall
+            boundaries.push({
+                min: new THREE.Vector3(room.position.x - room.width/2, 0, room.position.z - room.depth/2),
+                max: new THREE.Vector3(room.position.x - room.width/2 + 0.5, room.height, room.position.z + room.depth/2)
+            });
+            
+            // Right wall
+            boundaries.push({
+                min: new THREE.Vector3(room.position.x + room.width/2 - 0.5, 0, room.position.z - room.depth/2),
+                max: new THREE.Vector3(room.position.x + room.width/2, room.height, room.position.z + room.depth/2)
+            });
+            
+            // Front wall
+            boundaries.push({
+                min: new THREE.Vector3(room.position.x - room.width/2, 0, room.position.z - room.depth/2),
+                max: new THREE.Vector3(room.position.x + room.width/2, room.height, room.position.z - room.depth/2 + 0.5)
+            });
+            
+            // Back wall
+            boundaries.push({
+                min: new THREE.Vector3(room.position.x - room.width/2, 0, room.position.z + room.depth/2 - 0.5),
+                max: new THREE.Vector3(room.position.x + room.width/2, room.height, room.position.z + room.depth/2)
+            });
+
+            return roomMesh;
+        }
+
+        // Function to create a corridor between rooms
+        function createCorridor(corridor) {
+            const geometry = new THREE.BoxGeometry(
+                corridor.rotation === 0 ? corridor.length : corridor.width,
+                corridor.height,
+                corridor.rotation === 0 ? corridor.width : corridor.length
+            );
+            
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x888888,
+                side: THREE.BackSide
+            });
+            
+            const corridor_mesh = new THREE.Mesh(geometry, material);
+            corridor_mesh.position.set(
+                corridor.position.x,
+                corridor.position.y + corridor.height/2,
+                corridor.position.z
+            );
+            corridor_mesh.rotation.y = corridor.rotation;
+            scene.add(corridor_mesh);
+            
+            // Floor
+            const floorGeometry = new THREE.PlaneGeometry(
+                corridor.rotation === 0 ? corridor.length : corridor.width,
+                corridor.rotation === 0 ? corridor.width : corridor.length
+            );
+            const floorMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x444444,
+                roughness: 0.8
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set(corridor.position.x, 0.01, corridor.position.z);
+            floor.receiveShadow = true;
+            if (corridor.rotation !== 0) {
+                floor.rotation.y = corridor.rotation;
+            }
+            scene.add(floor);
+            
+            // Ceiling
+            const ceilingGeometry = new THREE.PlaneGeometry(
+                corridor.rotation === 0 ? corridor.length : corridor.width,
+                corridor.rotation === 0 ? corridor.width : corridor.length
+            );
+            const ceilingMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x888888,
+                side: THREE.DoubleSide
+            });
+            const ceiling = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.set(corridor.position.x, corridor.height, corridor.position.z);
+            if (corridor.rotation !== 0) {
+                ceiling.rotation.y = corridor.rotation;
+            }
+            ceiling.receiveShadow = true;
+            scene.add(ceiling);
+            
+            // Add corridor lighting (evenly spaced)
+            const lightCount = Math.max(2, Math.floor(
+                (corridor.rotation === 0 ? corridor.length : corridor.length) / 5
+            ));
+            
+            for (let i = 0; i < lightCount; i++) {
+                const ratio = (i / (lightCount - 1)) - 0.5;
+                const lightX = corridor.position.x + (corridor.rotation === 0 ? ratio * corridor.length : 0);
+                const lightZ = corridor.position.z + (corridor.rotation === 0 ? 0 : ratio * corridor.length);
+                
+                // Ceiling fixture
+                const fixture = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.2, 0.2, 0.1, 8),
+                    new THREE.MeshStandardMaterial({ color: 0x333333 })
+                );
+                fixture.position.set(lightX, corridor.height - 0.05, lightZ);
+                scene.add(fixture);
+                
+                // Light
+                const light = new THREE.PointLight(0xffffcc, 0.5, corridor.width * 1.5);
+                light.position.set(lightX, corridor.height - 0.2, lightZ);
+                light.castShadow = true;
+                scene.add(light);
+            }
+            
+            // Add corridor boundaries
+            if (corridor.rotation === 0) {
+                // Horizontal corridor (X-axis)
+                boundaries.push({
+                    min: new THREE.Vector3(corridor.position.x - corridor.length/2, 0, corridor.position.z - corridor.width/2),
+                    max: new THREE.Vector3(corridor.position.x + corridor.length/2, corridor.height, corridor.position.z - corridor.width/2 + 0.5)
+                });
+                
+                boundaries.push({
+                    min: new THREE.Vector3(corridor.position.x - corridor.length/2, 0, corridor.position.z + corridor.width/2 - 0.5),
+                    max: new THREE.Vector3(corridor.position.x + corridor.length/2, corridor.height, corridor.position.z + corridor.width/2)
+                });
+            } else {
+                // Vertical corridor (Z-axis)
+                boundaries.push({
+                    min: new THREE.Vector3(corridor.position.x - corridor.width/2, 0, corridor.position.z - corridor.length/2),
+                    max: new THREE.Vector3(corridor.position.x - corridor.width/2 + 0.5, corridor.height, corridor.position.z + corridor.length/2)
+                });
+                
+                boundaries.push({
+                    min: new THREE.Vector3(corridor.position.x + corridor.width/2 - 0.5, 0, corridor.position.z - corridor.length/2),
+                    max: new THREE.Vector3(corridor.position.x + corridor.width/2, corridor.height, corridor.position.z + corridor.length/2)
+                });
+            }
+            
+            return corridor_mesh;
+        }
+
+        // Function to create paintings with frames
+        function createPainting(imageURL, x, y, z, rotationY, width = 4, height = 3, title = "", addSpotlight = true) {
+            // Create frame
+            const frameMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x8b4513,
+                roughness: 0.7 
+            });
+            const frameGeometry = new THREE.BoxGeometry(width + 0.4, height + 0.4, 0.2);
+            const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+            frame.position.set(x, y, z);
+            frame.rotation.y = rotationY;
+            frame.castShadow = true;
+            scene.add(frame);
+
+            // Create painting
+            const textureLoader = new THREE.TextureLoader();
+            
+            // Create placeholder canvas for error handling
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#888888';
+            ctx.fillRect(0, 0, 512, 512);
+            ctx.fillStyle = '#000000';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(title || 'Artwork', 256, 256);
+            
+            const placeholderTexture = new THREE.CanvasTexture(canvas);
+            
+            // Create painting material with placeholder
+            const paintingMaterial = new THREE.MeshBasicMaterial({ map: placeholderTexture });
+            const paintingGeometry = new THREE.PlaneGeometry(width, height);
+            const painting = new THREE.Mesh(paintingGeometry, paintingMaterial);
+            
+            // Position painting slightly in front of frame
+            painting.position.set(x, y, z + 0.11);
+            painting.rotation.y = rotationY;
+            scene.add(painting);
+            
+            // Load actual texture and update when ready
+            textureLoader.load(
+                imageURL, 
+                function(texture) {
+                    paintingMaterial.map = texture;
+                    paintingMaterial.needsUpdate = true;
+                },
+                undefined,
+                function(err) {
+                    console.error('Error loading texture', err);
+                    // Placeholder already applied
+                }
+            );
+
+            // Add spotlight for the painting
+            if (addSpotlight) {
+                const spotlight = new THREE.SpotLight(0xffffff, 1);
+                spotlight.position.set(
+                    x + Math.sin(rotationY) * 3,
+                    y + 2,
+                    z + Math.cos(rotationY) * 3
+                );
+                spotlight.target = painting;
+                spotlight.angle = Math.PI / 10;
+                spotlight.penumbra = 0.5;
+                spotlight.decay = 1.5;
+                spotlight.distance = 10;
+                spotlight.castShadow = true;
+                scene.add(spotlight);
+                scene.add(spotlight.target);
+            }
+            
+            return { frame, painting };
+        }
+
+        // Create museum structure
+        rooms.forEach(room => createRoom(room));
+        corridors.forEach(corridor => createCorridor(corridor));
+
+        // Create collections for each gallery
+        const collections = {
+            "Main Entrance Hall": [
+                {
+                    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/800px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
+                    x: 0,
+                    y: 3,
+                    z: -9,
+                    rotation: 0,
+                    title: "Starry Night",
+                    width: 4,
+                    height: 3
+                },
+                {
+                    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0f/1665_Girl_with_a_Pearl_Earring.jpg/800px-1665_Girl_with_a_Pearl_Earring.jpg",
+                    x: -9,
+                    y: 3,
+                    z: 0,
+                    rotation: Math.PI / 2,
+                    title: "Girl with a Pearl Earring",
+                    width: 3,
+                    height: 4
+                },
+                {
+                    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/687px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg",
+                    x: 9,
+                    y: 3,
+                    z: 0,
+                    rotation: -Math.PI / 2,
+                    title: "Mona Lisa",
+                    width: 3,
+                    height: 4
+                },
+                {
+                    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg/800px-Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg",
+                    x: 0,
+                    y: 3,
+                    z: 9,
+                    rotation: Math.PI,
+                    title: "The Creation of Adam",
+                    width: 5,
+                    height: 3
+                }
+            ],
+            "Renaissance Gallery": [
+                {
+                    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg/800px-Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg",
+                    x: -30,
+                    y: 3,
+                    z: -9,
+                    rotation: 0,
+                    title: "Birth of Venus",
+                    width: 5,
+                    height: 3
+                },
+                {
+                    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/%C3%9Altima_Cena_-_Da_Vinci_5.jpg/800px-%C3%9Altima_Cena_-_Da_Vinci_5.jpg",
+                    x: -30,
+                    y: 3,
+                    z: 9,
+                    rotation: Math.PI,
+                    title: "The Last Supper",
+                    width: 6,
+                    height: 3
+                },
+                {
+                    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Raffael_046.jpg/800px-Raffael_046.jpg",
+                    x: -39,
+                    y: 3,
+                    z: 0,
+                    rotation: Math.PI / 2,
+                    title: "School of Athens",
+                    width: 5,
+                    height: 3
+                },
+                {
+                    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Leonardo_da_Vinci_or_Boltraffio_%28attrib%29_Salvator_Mundi_circa_1500.jpg/640px-Leonardo_da_Vinci_or_Boltraffio_%28attrib%29_Salvator_Mundi_circa_1500.jpg",
+                    x: -20,
+                    y: 3,
+                    z: 0,
+                    rotation: -Math.PI / 2,
+                    title: "Salvator Mundi",
+                    width: 3,
+                    height: 4
+                }
+            ],
+            "Modern Art Wing": [
+                {
+                    url: "https://upload.wikimedia.org/wikipedia/en/thumb/7/7d/Scream.jpg/640px-Scream.jpg",
+                    x: 30,
+                    y: 3,
+                    z: -9,
+                    rotation: 0,
+                    title: "The Scream",
+                    width: 3,
+                    height: 4
+                },
+                {
+                    url: "https://upload.wikimedia.org/wikipedia/en/thumb/4/4c/Les_Demoiselles_d%27Avignon.jpg/640px-Les_Demoiselles_d%27Avignon.jpg",
+                    x: 30,
+                    y: 3,
+                    z: 9,
+                    rotation: Math.PI,
+                    title: "Les Demoiselles d'Avignon",
+                    width: 4,
+                    height: 4
+                },
+                {
+                    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7c/Composition_No._III%2C_with_Red%2C_Blue%2C_Yellow%2C_and_Black%2C_1929.jpg/640px-Composition_No._III%2C_with_Red%2C_Blue%2C_Yellow%2C_and_Black%2C_1929.jpg",
+                    x: 39,
+                    y: 3,
+                    z: 0,
+                    rotation: -Math.PI / 2,
+                    title: "Composition with Red, Blue and Yellow",
+                    width: 3,
+                    height: 3
+                },
+                {
+                    url: "https://upload.wikimedia.org/wikipedia/en/thumb/1/1c/Pablo_Picasso%2C_1910%2C_Girl_with_a_Mandolin_%28Fanny_Tellier%29%2C_oil_on_canvas%2C_100.3_x_73.6_cm%2C_Museum_of_Modern_Art_New_York..jpg/776px-Pablo_Picasso%2C_1910%2C_Girl_with_a_Mandolin_%28Fanny_Tellier%29%2C_oil_on_canvas%2C_100.3_x_73.6_cm%2C_Museum_of_Modern_Art_New_York..jpg",
+                    x: 20,
+                    y: 3,
+                    z: 0,
+                    rotation: Math.PI / 2,
+                    title: "Girl with Mandolin",
+                    width: 3,
+                    height: 4
+                }
+            ]
+        };
+
+        // Add more collections for remaining galleries
+        collections["Impressionist Gallery"] = [
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/Claude_Monet%2C_Impression%2C_soleil_levant.jpg/800px-Claude_Monet%2C_Impression%2C_soleil_levant.jpg",
+                x: 0,
+                y: 3,
+                z: -39,
+                rotation: 0,
+                title: "Impression, Sunrise",
+                width: 4,
+                height: 3
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/21/Dance_at_Le_Moulin_de_la_Galette%2C_Renoir%2C_1876.jpg/800px-Dance_at_Le_Moulin_de_la_Galette%2C_Renoir%2C_1876.jpg",
+                x: -9,
+                y: 3,
+                z: -30,
+                rotation: Math.PI / 2,
+                title: "Dance at Le Moulin de la Galette",
+                width: 5,
+                height: 3
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Edgar_Degas_-_In_a_Caf%C3%A9_-_Google_Art_Project_2.jpg/800px-Edgar_Degas_-_In_a_Caf%C3%A9_-_Google_Art_Project_2.jpg",
+                x: 9,
+                y: 3,
+                z: -30,
+                rotation: -Math.PI / 2,
+                title: "L'Absinthe",
+                width: 3,
+                height: 4
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Claude_Monet_-_Water_Lilies_-_Google_Art_Project_%28462013%29.jpg/1200px-Claude_Monet_-_Water_Lilies_-_Google_Art_Project_%28462013%29.jpg",
+                x: 0,
+                y: 3,
+                z: -20,
+                rotation: Math.PI,
+                title: "Water Lilies",
+                width: 5,
+                height: 3
+            }
+        ];
+
+        collections["Photography Exhibition"] = [
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Ansel_Adams_-_National_Archives_79-AA-G13.jpg/740px-Ansel_Adams_-_National_Archives_79-AA-G13.jpg",
+                x: 0,
+                y: 3,
+                z: 39,
+                rotation: Math.PI,
+                title: "Tetons and Snake River",
+                width: 4,
+                height: 3
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Dorothea_Lange%2C_Migrant_Mother%2C_Nipomo%2C_California%2C_1936._2017-9-15.jpg/771px-Dorothea_Lange%2C_Migrant_Mother%2C_Nipomo%2C_California%2C_1936._2017-9-15.jpg",
+                x: -7,
+                y: 3,
+                z: 30,
+                rotation: Math.PI / 2,
+                title: "Migrant Mother",
+                width: 3,
+                height: 4
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/3/3c/Henri_Cartier-Bresson%2C_Behind_the_Gare_Saint-Lazare%2C_1932.jpg",
+                x: 7,
+                y: 3,
+                z: 30,
+                rotation: -Math.PI / 2,
+                title: "Behind the Gare Saint-Lazare",
+                width: 4,
+                height: 3
+            }
+        ];
+
+        collections["Sculpture Hall"] = [
+            // For sculptures, we'll just put some paintings as placeholders
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Michelangelo%27s_Pieta_5450.jpg/1280px-Michelangelo%27s_Pieta_5450.jpg",
+                x: -30,
+                y: 3,
+                z: -39,
+                rotation: 0,
+                title: "Pietà",
+                width: 4,
+                height: 3
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Aphrodite_of_Milos.jpg/792px-Aphrodite_of_Milos.jpg",
+                x: -39,
+                y: 3,
+                z: -30,
+                rotation: Math.PI / 2,
+                title: "Venus de Milo",
+                width: 3,
+                height: 5
+            }
+        ];
+
+        collections["Contemporary Gallery"] = [
+            {
+                url: "https://upload.wikimedia.org/wikipedia/en/thumb/1/1f/Campbell%27s_Soup_Cans_MOMA.jpg/800px-Campbell%27s_Soup_Cans_MOMA.jpg",
+                x: 30,
+                y: 3,
+                z: -39,
+                rotation: 0,
+                title: "Campbell's Soup Cans",
+                width: 4,
+                height: 3
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/en/thumb/d/de/Marcel_Duchamp%2C_1917%2C_Fountain%2C_photograph_by_Alfred_Stieglitz.jpg/800px-Marcel_Duchamp%2C_1917%2C_Fountain%2C_photograph_by_Alfred_Stieglitz.jpg",
+                x: 39,
+                y: 3,
+                z: -30,
+                rotation: -Math.PI / 2,
+                title: "Fountain",
+                width: 3,
+                height: 4
+            }
+        ];
+
+        collections["Ancient Art Collection"] = [
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Tutanchamun_Maske.jpg/640px-Tutanchamun_Maske.jpg",
+                x: -30,
+                y: 3,
+                z: 39,
+                rotation: Math.PI,
+                title: "Mask of Tutankhamun",
+                width: 3,
+                height: 4
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f6/Parthenon_from_west.jpg/800px-Parthenon_from_west.jpg",
+                x: -39,
+                y: 3,
+                z: 30,
+                rotation: Math.PI / 2,
+                title: "The Parthenon",
+                width: 5,
+                height: 3
+            }
+        ];
+
+        collections["Interactive Exhibition"] = [
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/NASA_Earth_America_2010.jpg/1280px-NASA_Earth_America_2010.jpg",
+                x: 30,
+                y: 3,
+                z: 39,
+                rotation: Math.PI,
+                title: "Earth from Space",
+                width: 4,
+                height: 4
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Cat_03.jpg/1200px-Cat_03.jpg",
+                x: 39,
+                y: 3,
+                z: 30,
+                rotation: -Math.PI / 2,
+                title: "Internet Cat",
+                width: 4,
+                height: 3
+            }
+        ];
+
+        // Create all paintings for each gallery
+        Object.entries(collections).forEach(([room, paintings]) => {
+            paintings.forEach(painting => {
+                createPainting(
+                    painting.url,
+                    painting.x,
+                    painting.y,
+                    painting.z,
+                    painting.rotation,
+                    painting.width || 4,
+                    painting.height || 3,
+                    painting.title,
+                    true
+                );
+            });
+        });
+
+        // Create minimap
+        const mapCanvas = document.getElementById('map');
+        const mapCtx = mapCanvas.getContext('2d');
+        let showMap = true;
+
+        // Toggle map with M key
+        window.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'm') {
+                showMap = !showMap;
+                mapCanvas.style.display = showMap ? 'block' : 'none';
+            }
+        });
+
+        function updateMap() {
+            if (!showMap) return;
+
+            mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+            mapCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            mapCtx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
+
+            // Scale for map
+            const scale = 2.5;
+            const offsetX = mapCanvas.width / 2;
+            const offsetY = mapCanvas.height / 2;
+
+            // Draw rooms
+            rooms.forEach(room => {
+                mapCtx.fillStyle = 'rgba(100, 100, 100, 0.5)';
+                mapCtx.fillRect(
+                    offsetX + (room.position.x - room.width/2) / scale,
+                    offsetY + (room.position.z - room.depth/2) / scale,
+                    room.width / scale,
+                    room.depth / scale
+                );
+                
+                // Room outline
+                mapCtx.strokeStyle = 'white';
+                mapCtx.lineWidth = 1;
+                mapCtx.strokeRect(
+                    offsetX + (room.position.x - room.width/2) / scale,
+                    offsetY + (room.position.z - room.depth/2) / scale,
+                    room.width / scale,
+                    room.depth / scale
+                );
+            });
+
+            // Draw corridors
+            corridors.forEach(corridor => {
+                mapCtx.fillStyle = 'rgba(80, 80, 80, 0.5)';
+                
+                if (corridor.rotation === 0) {
+                    // Horizontal corridor
+                    mapCtx.fillRect(
+                        offsetX + (corridor.position.x - corridor.length/2) / scale,
+                        offsetY + (corridor.position.z - corridor.width/2) / scale,
+                        corridor.length / scale,
+                        corridor.width / scale
+                    );
+                } else {
+                    // Vertical corridor
+                    mapCtx.fillRect(
+                        offsetX + (corridor.position.x - corridor.width/2) / scale,
+                        offsetY + (corridor.position.z - corridor.length/2) / scale,
+                        corridor.width / scale,
+                        corridor.length / scale
+                    );
+                }
+            });
+
+            // Draw player position
+            mapCtx.fillStyle = 'red';
+            mapCtx.beginPath();
+            mapCtx.arc(
+                offsetX + camera.position.x / scale,
+                offsetY + camera.position.z / scale,
+                3, 0, Math.PI * 2
+            );
+            mapCtx.fill();
+
+            // Draw player direction
+            const dirX = Math.sin(yaw) * 7;
+            const dirZ = Math.cos(yaw) * 7;
+            
+            mapCtx.beginPath();
+            mapCtx.moveTo(
+                offsetX + camera.position.x / scale,
+                offsetY + camera.position.z / scale
+            );
+            mapCtx.lineTo(
+                offsetX + (camera.position.x + dirX) / scale,
+                offsetY + (camera.position.z + dirZ) / scale
+            );
+            mapCtx.strokeStyle = 'red';
+            mapCtx.lineWidth = 2;
+            mapCtx.stroke();
+        }
+
+        // FPS Controls with collision detection
+        let moveSpeed = 0.15;
+        let playerHeight = 1.8;
+        let playerRadius = 0.5;
         let keys = {};
         let pitch = 0, yaw = 0;
         let sensitivity = 0.002;
         let isLocked = false;
+        let currentRoom = "Main Entrance Hall";
 
         window.addEventListener("keydown", (event) => keys[event.key.toLowerCase()] = true);
         window.addEventListener("keyup", (event) => keys[event.key.toLowerCase()] = false);
@@ -84,42 +1245,148 @@
 
         document.addEventListener("pointerlockchange", () => {
             isLocked = document.pointerLockElement === document.body;
+            if (isLocked) {
+                document.getElementById('info').style.opacity = '0.5';
+            } else {
+                document.getElementById('info').style.opacity = '1';
+            }
         });
 
         document.addEventListener("mousemove", (event) => {
             if (isLocked) {
                 yaw -= event.movementX * sensitivity;
                 pitch -= event.movementY * sensitivity;
-                pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+                pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
             }
         });
 
-        // Game Loop
+        // Check for collision with boundaries
+        function checkCollision(position) {
+            for (const boundary of boundaries) {
+                if (position.x + playerRadius > boundary.min.x && position.x - playerRadius < boundary.max.x &&
+                    position.y < boundary.max.y &&
+                    position.z + playerRadius > boundary.min.z && position.z - playerRadius < boundary.max.z) {
+                    
+                    // Determine closest face to push out from
+                    const distances = [
+                        {axis: 'x', dir: -1, dist: Math.abs(position.x + playerRadius - boundary.min.x)},
+                        {axis: 'x', dir: 1, dist: Math.abs(position.x - playerRadius - boundary.max.x)},
+                        {axis: 'z', dir: -1, dist: Math.abs(position.z + playerRadius - boundary.min.z)},
+                        {axis: 'z', dir: 1, dist: Math.abs(position.z - playerRadius - boundary.max.z)}
+                    ];
+                    
+                    distances.sort((a, b) => a.dist - b.dist);
+                    const closest = distances[0];
+                    
+                    // Push out of collision
+                    if (closest.dir < 0) {
+                        position[closest.axis] = boundary.min[closest.axis] - playerRadius;
+                    } else {
+                        position[closest.axis] = boundary.max[closest.axis] + playerRadius;
+                    }
+                }
+            }
+            
+            return position;
+        }
+
+        // Determine which room the player is in
+        function determineCurrentRoom(position) {
+            for (const room of rooms) {
+                if (position.x > room.position.x - room.width/2 && 
+                    position.x < room.position.x + room.width/2 &&
+                    position.z > room.position.z - room.depth/2 && 
+                    position.z < room.position.z + room.depth/2) {
+                    return room.name;
+                }
+            }
+            
+            // Check if in corridors
+            for (const corridor of corridors) {
+                let inCorridor = false;
+                
+                if (corridor.rotation === 0) {
+                    // Horizontal corridor (X-axis)
+                    inCorridor = position.x > corridor.position.x - corridor.length/2 && 
+                                position.x < corridor.position.x + corridor.length/2 &&
+                                position.z > corridor.position.z - corridor.width/2 && 
+                                position.z < corridor.position.z + corridor.width/2;
+                } else {
+                    // Vertical corridor (Z-axis)
+                    inCorridor = position.x > corridor.position.x - corridor.width/2 && 
+                                position.x < corridor.position.x + corridor.width/2 &&
+                                position.z > corridor.position.z - corridor.length/2 && 
+                                position.z < corridor.position.z + corridor.length/2;
+                }
+                
+                if (inCorridor) {
+                    return "Corridor";
+                }
+            }
+            
+            return "Outside";
+        }
+
+        // Update room display
+        function updateRoomDisplay() {
+            const newRoom = determineCurrentRoom(camera.position);
+            if (newRoom !== currentRoom) {
+                currentRoom = newRoom;
+                document.getElementById('room-title').textContent = currentRoom;
+                if (currentRoom !== "Corridor" && currentRoom !== "Outside") {
+                    document.getElementById('room-title').style.opacity = 1;
+                    setTimeout(() => {
+                        document.getElementById('room-title').style.opacity = 0;
+                    }, 3000);
+                }
+            }
+        }
+
+        // Animation loop
         function animate() {
             requestAnimationFrame(animate);
-
-            // Apply rotation
-            camera.rotation.x = pitch;
-            camera.rotation.y = yaw;
-
-            // Movement
-            let forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-            let right = new THREE.Vector3(-forward.z, 0, forward.x);
-            let movement = new THREE.Vector3();
-
-            if (keys["w"]) movement.add(forward);
-            if (keys["s"]) movement.sub(forward);
-            if (keys["a"]) movement.sub(right);
-            if (keys["d"]) movement.add(right);
-
-            movement.normalize().multiplyScalar(moveSpeed);
-            camera.position.add(movement);
-
+            
+            // Movement direction based on keys
+            if (isLocked) {
+                let moveVector = new THREE.Vector3();
+                
+                if (keys['w']) moveVector.z -= 1;
+                if (keys['s']) moveVector.z += 1;
+                if (keys['a']) moveVector.x -= 1;
+                if (keys['d']) moveVector.x += 1;
+                
+                // Normalize for diagonal movement
+                if (moveVector.length() > 0) {
+                    moveVector.normalize();
+                }
+                
+                // Apply movement relative to camera direction
+                moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+                
+                // Update position with collision detection
+                const newPosition = camera.position.clone().add(moveVector.multiplyScalar(moveSpeed));
+                camera.position.copy(checkCollision(newPosition));
+                
+                // Maintain camera height
+                camera.position.y = playerHeight;
+                
+                // Update camera direction
+                camera.lookAt(
+                    camera.position.x + Math.sin(yaw) * Math.cos(pitch),
+                    camera.position.y + Math.sin(pitch),
+                    camera.position.z + Math.cos(yaw) * Math.cos(pitch)
+                );
+                
+                // Update room display
+                updateRoomDisplay();
+            }
+            
+            // Update minimap
+            updateMap();
+            
             renderer.render(scene, camera);
         }
 
-        // Set Camera to a Better Position
-        camera.position.set(0, 3, 10);
         animate();
     </script>
 </body>

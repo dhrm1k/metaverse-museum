@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Museum with Multiple Galleries</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Click to interact<br>WASD to move<br>Mouse to look around</div>
+
+    <script type="module">
+        import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
+
+        // Scene, Camera, Renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // Museum layout (multiple connected rooms)
+        const rooms = [
+            { 
+                name: "Main Hall", 
+                width: 20, 
+                height: 10, 
+                depth: 30, 
+                position: { x: 0, y: 0, z: 0 }, 
+                color: 0xaaaaaa,
+                paintings: []
+            },
+            { 
+                name: "Renaissance Gallery", 
+                width: 20, 
+                height: 10, 
+                depth: 20, 
+                position: { x: -30, y: 0, z: 0 }, 
+                color: 0xc8b6a6,
+                paintings: []
+            },
+            { 
+                name: "Modern Art Wing", 
+                width: 20, 
+                height: 10, 
+                depth: 20, 
+                position: { x: 30, y: 0, z: 0 }, 
+                color: 0xb6c8a6,
+                paintings: []
+            },
+            { 
+                name: "Impressionist Gallery", 
+                width: 20, 
+                height: 10, 
+                depth: 20, 
+                position: { x: 0, y: 0, z: -40 }, 
+                color: 0xa6b6c8,
+                paintings: []
+            }
+        ];
+
+        // Corridors connecting rooms
+        const corridors = [
+            { 
+                from: "Main Hall", 
+                to: "Renaissance Gallery", 
+                width: 6, 
+                height: 8, 
+                position: { x: -20, y: 0, z: 0 }, 
+                rotation: 0, 
+                length: 10 
+            },
+            { 
+                from: "Main Hall", 
+                to: "Modern Art Wing", 
+                width: 6, 
+                height: 8, 
+                position: { x: 20, y: 0, z: 0 }, 
+                rotation: 0, 
+                length: 10 
+            },
+            { 
+                from: "Main Hall", 
+                to: "Impressionist Gallery", 
+                width: 6, 
+                height: 8, 
+                position: { x: 0, y: 0, z: -25 }, 
+                rotation: Math.PI/2, 
+                length: 15 
+            }
+        ];
+
+        // Boundaries for collision detection
+        const boundaries = [];
+
+        // Environment lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        scene.add(ambientLight);
+
+        // Function to create a room
+        function createRoom(room) {
+            // Room walls
+            const roomMaterial = new THREE.MeshStandardMaterial({
+                color: room.color,
+                side: THREE.BackSide,
+                transparent: false,
+                opacity: 1
+            });
+
+            const roomGeometry = new THREE.BoxGeometry(room.width, room.height, room.depth);
+            const roomMesh = new THREE.Mesh(roomGeometry, roomMaterial);
+            roomMesh.position.set(room.position.x, room.position.y + room.height/2, room.position.z);
+            roomMesh.name = room.name;
+            scene.add(roomMesh);
+
+            // Floor
+            const floorGeometry = new THREE.PlaneGeometry(room.width, room.depth);
+            const floorMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x444444,
+                roughness: 0.8
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set(room.position.x, 0.01, room.position.z);
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Ceiling light
+            const light = new THREE.PointLight(0xffffcc, 0.8, room.width);
+            light.position.set(room.position.x, room.height - 1, room.position.z);
+            light.castShadow = true;
+            scene.add(light);
+
+            // Add room boundaries for collision detection
+            // Left wall
+            boundaries.push({
+                min: new THREE.Vector3(room.position.x - room.width/2, 0, room.position.z - room.depth/2),
+                max: new THREE.Vector3(room.position.x - room.width/2 + 0.5, room.height, room.position.z + room.depth/2)
+            });
+            
+            // Right wall
+            boundaries.push({
+                min: new THREE.Vector3(room.position.x + room.width/2 - 0.5, 0, room.position.z - room.depth/2),
+                max: new THREE.Vector3(room.position.x + room.width/2, room.height, room.position.z + room.depth/2)
+            });
+            
+            // Front wall
+            boundaries.push({
+                min: new THREE.Vector3(room.position.x - room.width/2, 0, room.position.z - room.depth/2),
+                max: new THREE.Vector3(room.position.x + room.width/2, room.height, room.position.z - room.depth/2 + 0.5)
+            });
+            
+            // Back wall
+            boundaries.push({
+                min: new THREE.Vector3(room.position.x - room.width/2, 0, room.position.z + room.depth/2 - 0.5),
+                max: new THREE.Vector3(room.position.x + room.width/2, room.height, room.position.z + room.depth/2)
+            });
+
+            return roomMesh;
+        }
+
+        // Function to create a corridor between rooms
+        function createCorridor(corridor) {
+            const geometry = new THREE.BoxGeometry(
+                corridor.rotation === 0 ? corridor.length : corridor.width,
+                corridor.height,
+                corridor.rotation === 0 ? corridor.width : corridor.length
+            );
+            
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x888888,
+                side: THREE.BackSide
+            });
+            
+            const corridor_mesh = new THREE.Mesh(geometry, material);
+            corridor_mesh.position.set(
+                corridor.position.x,
+                corridor.position.y + corridor.height/2,
+                corridor.position.z
+            );
+            corridor_mesh.rotation.y = corridor.rotation;
+            scene.add(corridor_mesh);
+            
+            // Floor
+            const floorGeometry = new THREE.PlaneGeometry(
+                corridor.rotation === 0 ? corridor.length : corridor.width,
+                corridor.rotation === 0 ? corridor.width : corridor.length
+            );
+            const floorMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x444444,
+                roughness: 0.8
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set(corridor.position.x, 0.01, corridor.position.z);
+            floor.receiveShadow = true;
+            if (corridor.rotation !== 0) {
+                floor.rotation.y = corridor.rotation;
+            }
+            scene.add(floor);
+            
+            // Corridor light
+            const light = new THREE.PointLight(0xffffcc, 0.6, 10);
+            light.position.set(corridor.position.x, corridor.height - 1, corridor.position.z);
+            scene.add(light);
+            
+            // Add corridor boundaries
+            if (corridor.rotation === 0) {
+                // Horizontal corridor (X-axis)
+                boundaries.push({
+                    min: new THREE.Vector3(corridor.position.x - corridor.length/2, 0, corridor.position.z - corridor.width/2),
+                    max: new THREE.Vector3(corridor.position.x + corridor.length/2, corridor.height, corridor.position.z - corridor.width/2 + 0.5)
+                });
+                
+                boundaries.push({
+                    min: new THREE.Vector3(corridor.position.x - corridor.length/2, 0, corridor.position.z + corridor.width/2 - 0.5),
+                    max: new THREE.Vector3(corridor.position.x + corridor.length/2, corridor.height, corridor.position.z + corridor.width/2)
+                });
+            } else {
+                // Vertical corridor (Z-axis)
+                boundaries.push({
+                    min: new THREE.Vector3(corridor.position.x - corridor.width/2, 0, corridor.position.z - corridor.length/2),
+                    max: new THREE.Vector3(corridor.position.x - corridor.width/2 + 0.5, corridor.height, corridor.position.z + corridor.length/2)
+                });
+                
+                boundaries.push({
+                    min: new THREE.Vector3(corridor.position.x + corridor.width/2 - 0.5, 0, corridor.position.z - corridor.length/2),
+                    max: new THREE.Vector3(corridor.position.x + corridor.width/2, corridor.height, corridor.position.z + corridor.length/2)
+                });
+            }
+            
+            return corridor_mesh;
+        }
+
+        // Function to create paintings with frames
+        function createPainting(imageURL, x, y, z, rotationY, width = 4, height = 3, title = "", addSpotlight = true) {
+            // Create frame
+            const frameMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x8b4513,
+                roughness: 0.7 
+            });
+            const frameGeometry = new THREE.BoxGeometry(width + 0.4, height + 0.4, 0.2);
+            const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+            frame.position.set(x, y, z);
+            frame.rotation.y = rotationY;
+            frame.castShadow = true;
+            scene.add(frame);
+
+            // Create painting
+            const textureLoader = new THREE.TextureLoader();
+            
+            // Create placeholder canvas for error handling
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#888888';
+            ctx.fillRect(0, 0, 512, 512);
+            ctx.fillStyle = '#000000';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(title || 'Artwork', 256, 256);
+            
+            const placeholderTexture = new THREE.CanvasTexture(canvas);
+            
+            // Create painting material with placeholder
+            const paintingMaterial = new THREE.MeshBasicMaterial({ map: placeholderTexture });
+            const paintingGeometry = new THREE.PlaneGeometry(width, height);
+            const painting = new THREE.Mesh(paintingGeometry, paintingMaterial);
+            
+            // Position painting slightly in front of frame
+            painting.position.set(x, y, z + 0.11);
+            painting.rotation.y = rotationY;
+            scene.add(painting);
+            
+            // Load actual texture and update when ready
+            textureLoader.load(
+                imageURL, 
+                function(texture) {
+                    paintingMaterial.map = texture;
+                    paintingMaterial.needsUpdate = true;
+                },
+                undefined,
+                function(err) {
+                    console.error('Error loading texture', err);
+                    // Placeholder already applied
+                }
+            );
+
+            // Add spotlight for the painting
+            if (addSpotlight) {
+                const spotlight = new THREE.SpotLight(0xffffff, 1);
+                spotlight.position.set(
+                    x + Math.sin(rotationY) * 3,
+                    y + 2,
+                    z + Math.cos(rotationY) * 3
+                );
+                spotlight.target = painting;
+                spotlight.angle = Math.PI / 10;
+                spotlight.penumbra = 0.5;
+                spotlight.decay = 1.5;
+                spotlight.distance = 10;
+                spotlight.castShadow = true;
+                scene.add(spotlight);
+                scene.add(spotlight.target);
+            }
+            
+            return { frame, painting };
+        }
+
+        // Create museum structure
+        rooms.forEach(room => createRoom(room));
+        corridors.forEach(corridor => createCorridor(corridor));
+
+        // Add paintings to Main Hall
+        const mainHallPaintings = [
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/800px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
+                x: 0,
+                y: 3,
+                z: -14,
+                rotation: 0,
+                title: "Starry Night"
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg/800px-Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg",
+                x: -9,
+                y: 3,
+                z: 0,
+                rotation: Math.PI / 2,
+                title: "Creation of Adam",
+                width: 5,
+                height: 3
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/687px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg",
+                x: 9,
+                y: 3,
+                z: 0,
+                rotation: -Math.PI / 2,
+                title: "Mona Lisa",
+                width: 3,
+                height: 4
+            }
+        ];
+
+        // Renaissance Gallery paintings
+        const renaissancePaintings = [
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg/800px-Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg",
+                x: -30,
+                y: 3,
+                z: -9,
+                rotation: 0,
+                title: "Birth of Venus",
+                width: 5,
+                height: 3
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/%C3%9Altima_Cena_-_Da_Vinci_5.jpg/800px-%C3%9Altima_Cena_-_Da_Vinci_5.jpg",
+                x: -30,
+                y: 3,
+                z: 9,
+                rotation: Math.PI,
+                title: "The Last Supper",
+                width: 6,
+                height: 3
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Raffael_046.jpg/800px-Raffael_046.jpg",
+                x: -39,
+                y: 3,
+                z: 0,
+                rotation: Math.PI / 2,
+                title: "School of Athens",
+                width: 5,
+                height: 3
+            }
+        ];
+
+        // Modern Art Gallery paintings
+        const modernArtPaintings = [
+            {
+                url: "https://upload.wikimedia.org/wikipedia/en/thumb/7/7d/Scream.jpg/800px-Scream.jpg",
+                x: 30,
+                y: 3,
+                z: -9,
+                rotation: 0,
+                title: "The Scream"
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/en/thumb/4/4c/Les_Demoiselles_d%27Avignon.jpg/800px-Les_Demoiselles_d%27Avignon.jpg",
+                x: 30,
+                y: 3,
+                z: 9,
+                rotation: Math.PI,
+                title: "Les Demoiselles d'Avignon"
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7c/Composition_No._III%2C_with_Red%2C_Blue%2C_Yellow%2C_and_Black%2C_1929.jpg/800px-Composition_No._III%2C_with_Red%2C_Blue%2C_Yellow%2C_and_Black%2C_1929.jpg",
+                x: 39,
+                y: 3,
+                z: 0,
+                rotation: -Math.PI / 2,
+                title: "Composition with Red, Blue and Yellow"
+            }
+        ];
+
+        // Impressionist Gallery paintings
+        const impressionistPaintings = [
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/Claude_Monet%2C_Impression%2C_soleil_levant.jpg/800px-Claude_Monet%2C_Impression%2C_soleil_levant.jpg",
+                x: 0,
+                y: 3,
+                z: -49,
+                rotation: 0,
+                title: "Impression, Sunrise"
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/21/Dance_at_Le_Moulin_de_la_Galette%2C_Renoir%2C_1876.jpg/800px-Dance_at_Le_Moulin_de_la_Galette%2C_Renoir%2C_1876.jpg",
+                x: -9,
+                y: 3,
+                z: -40,
+                rotation: Math.PI / 2,
+                title: "Dance at Le Moulin de la Galette",
+                width: 5,
+                height: 3
+            },
+            {
+                url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Edgar_Degas_-_In_a_Caf%C3%A9_-_Google_Art_Project_2.jpg/800px-Edgar_Degas_-_In_a_Caf%C3%A9_-_Google_Art_Project_2.jpg",
+                x: 9,
+                y: 3,
+                z: -40,
+                rotation: -Math.PI / 2,
+                title: "L'Absinthe"
+            }
+        ];
+
+        // Create all paintings
+        mainHallPaintings.forEach(painting => {
+            createPainting(
+                painting.url,
+                painting.x,
+                painting.y,
+                painting.z,
+                painting.rotation,
+                painting.width || 4,
+                painting.height || 3,
+                painting.title
+            );
+        });
+
+        renaissancePaintings.forEach(painting => {
+            createPainting(
+                painting.url,
+                painting.x,
+                painting.y,
+                painting.z,
+                painting.rotation,
+                painting.width || 4,
+                painting.height || 3,
+                painting.title
+            );
+        });
+
+        modernArtPaintings.forEach(painting => {
+            createPainting(
+                painting.url,
+                painting.x,
+                painting.y,
+                painting.z,
+                painting.rotation,
+                painting.width || 4,
+                painting.height || 3,
+                painting.title
+            );
+        });
+
+        impressionistPaintings.forEach(painting => {
+            createPainting(
+                painting.url,
+                painting.x,
+                painting.y,
+                painting.z,
+                painting.rotation,
+                painting.width || 4,
+                painting.height || 3,
+                painting.title
+            );
+        });
+
+        // FPS Controls with collision detection
+        let moveSpeed = 0.15;
+        let playerHeight = 1.8;
+        let playerRadius = 0.5;
+        let keys = {};
+        let pitch = 0, yaw = 0;
+        let sensitivity = 0.002;
+        let isLocked = false;
+        let currentRoom = "Main Hall";
+
+        window.addEventListener("keydown", (event) => keys[event.key.toLowerCase()] = true);
+        window.addEventListener("keyup", (event) => keys[event.key.toLowerCase()] = false);
+
+        document.body.addEventListener("click", () => {
+            document.body.requestPointerLock();
+        });
+
+        document.addEventListener("pointerlockchange", () => {
+            isLocked = document.pointerLockElement === document.body;
+            if (isLocked) {
+                document.getElementById('info').style.opacity = '0.5';
+            } else {
+                document.getElementById('info').style.opacity = '1';
+            }
+        });
+
+        document.addEventListener("mousemove", (event) => {
+            if (isLocked) {
+                yaw -= event.movementX * sensitivity;
+                pitch -= event.movementY * sensitivity;
+                pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
+            }
+        });
+
+        // Check for collision with boundaries
+        function checkCollision(position) {
+            for (const boundary of boundaries) {
+                if (position.x + playerRadius > boundary.min.x && position.x - playerRadius < boundary.max.x &&
+                    position.y < boundary.max.y &&
+                    position.z + playerRadius > boundary.min.z && position.z - playerRadius < boundary.max.z) {
+                    
+                    // Determine closest face to push out from
+                    const distances = [
+                        {axis: 'x', dir: -1, dist: Math.abs(position.x + playerRadius - boundary.min.x)},
+                        {axis: 'x', dir: 1, dist: Math.abs(position.x - playerRadius - boundary.max.x)},
+                        {axis: 'z', dir: -1, dist: Math.abs(position.z + playerRadius - boundary.min.z)},
+                        {axis: 'z', dir: 1, dist: Math.abs(position.z - playerRadius - boundary.max.z)}
+                    ];
+                    
+                    distances.sort((a, b) => a.dist - b.dist);
+                    const closest = distances[0];
+                    
+                    if (closest.axis === 'x') {
+                        position.x += closest.dir * (closest.dist + 0.01);
+                    } else {
+                        position.z += closest.dir * (closest.dist + 0.01);
+                    }
+                    
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Check which room the player is in
+        function checkCurrentRoom(position) {
+            for (const room of rooms) {
+                if (position.x > room.position.x - room.width/2 && 
+                    position.x < room.position.x + room.width/2 &&
+                    position.z > room.position.z - room.depth/2 && 
+                    position.z < room.position.z + room.depth/2) {
+                    if (currentRoom !== room.name) {
+                        currentRoom = room.name;
+                        document.getElementById('info').innerHTML = `
+                            <strong>${room.name}</strong><br>
+                            WASD to move, Mouse to look
+                        `;
+                    }
+                    return;
+                }
+            }
+            
+            // Check if in a corridor
+            for (const corridor of corridors) {
+                if (position.x > corridor.position.x - (corridor.rotation === 0 ? corridor.length/2 : corridor.width/2) && 
+                    position.x < corridor.position.x + (corridor.rotation === 0 ? corridor.length/2 : corridor.width/2) &&
+                    position.z > corridor.position.z - (corridor.rotation === 0 ? corridor.width/2 : corridor.length/2) && 
+                    position.z < corridor.position.z + (corridor.rotation === 0 ? corridor.width/2 : corridor.length/2)) {
+                    
+                    const corridorName = `Corridor: ${corridor.from} to ${corridor.to}`;
+                    if (currentRoom !== corridorName) {
+                        currentRoom = corridorName;
+                        document.getElementById('info').innerHTML = `
+                            <strong>${corridor.from} to ${corridor.to}</strong><br>
+                            WASD to move, Mouse to look
+                        `;
+                    }
+                    return;
+                }
+            }
+        }
+
+        // Game Loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Apply rotation
+            camera.rotation.x = pitch;
+            camera.rotation.y = yaw;
+
+            // Movement with collision detection
+            let forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+            let right = new THREE.Vector3(-forward.z, 0, forward.x);
+            let movement = new THREE.Vector3();
+
+            if (keys["w"]) movement.add(forward);
+            if (keys["s"]) movement.sub(forward);
+            if (keys["a"]) movement.sub(right);
+            if (keys["d"]) movement.add(right);
+
+            if (movement.length() > 0) {
+                movement.normalize().multiplyScalar(moveSpeed);
+                
+                // Calculate next position
+                const nextPosition = camera.position.clone().add(movement);
+                
+                // Check for collisions
+                if (!checkCollision(nextPosition)) {
+                    camera.position.copy(nextPosition);
+                }
+            }
+            
+            // Keep player at correct height
+            camera.position.y = playerHeight;
+            
+            // Check which room the player is in
+            checkCurrentRoom(camera.position);
+
+            renderer.render(scene, camera);
+        }
+
+        // Set Camera to a Better Starting Position
+        camera.position.set(0, playerHeight, 10);
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>

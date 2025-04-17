@@ -56,10 +56,7 @@
 
 ## 📄 Project Presentation
 
-🖼️ [Click here to view our Hackathon presentation (PDF)]
-
-[METAVERSE MUSEUM (1).pdf](https://github.com/user-attachments/files/19796011/METAVERSE.MUSEUM.1.pdf)
-
+🖼️ [Click here to view our Hackathon presentation (PDF)]([METAVERSE MUSEUM (1).pdf](https://github.com/user-attachments/files/19796011/METAVERSE.MUSEUM.1.pdf)
 
 ---
 

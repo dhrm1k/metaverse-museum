@@ -1,24 +1,24 @@
-# 🎨 Metaverse Museum
+# Metaverse Museum
 
 Hey everyone!
 
 Last weekend, we had an amazing time at **HackNuthon 6.0** at **Nirma University**.  
-We’re super excited to share that our team made it to the **Top 10** in the Open Innovation track—and yes, we even got some cool goodies! 🎁
+We’re super excited to share that our team made it to the **Top 10** in the Open Innovation track and yes, we even got some cool goodies! 🎁
 
 ---
 
-## 🧠 What We Made
+## What We Made
 
 We built a **Metaverse Museum**—a 3D interactive museum using **Three.js**.
 
 - You can walk around like you're in a real gallery
 - Explore art and music digitally
-- No need to travel or buy tickets—just open it on your browser
+- No need to travel or buy tickets just open it on your browser
 - It works for anyone, anywhere
 
 ---
 
-## 💡 Why We Made This
+## Why We Made This
 
 Let’s be honest—most of us don’t visit museums that often.  
 Art sometimes feels far away or something only “experts” get.
@@ -29,7 +29,7 @@ We believe art should be for everyone. So we made a museum that’s free, online
 
 ---
 
-## 🎨 What Art Means to Us
+##  What Art Means to Us
 
 Art isn’t just about paintings or music.  
 It’s about **looking closely**, **thinking differently**, and **feeling something new**.
@@ -38,14 +38,14 @@ It helps you pause and see beauty in everyday life.
 
 ---
 
-## 🌍 What We Hope
+## What We Hope
 
 We hope this museum gets more people curious about creativity.  
 Whether you're from a big city or a small town, we want you to experience art—no limits.
 
 ---
 
-## 🛠️ Tech We Used
+## Tech We Used
 
 - `Three.js` for the 3D world
 - Basic web stuff like `HTML`, `CSS`, `JavaScript`
@@ -66,7 +66,7 @@ Whether you're from a big city or a small town, we want you to experience art—
 
 ---
 
-## 👨‍💻 Team Members
+## Team Members
 
 - Rathor Sarthak  
 - Jigar Kushwaha  

@@ -65,7 +65,7 @@ paintingData.forEach((painting) => {
                 new THREE.PlaneGeometry(4, 3),
                 new THREE.MeshStandardMaterial({ 
                     map: texture,
-                    side: THREE.DoubleSide // Ensure visible from both sides
+                    side: THREE.DoubleSide
                 })
             );
             paintingMesh.position.set(painting.position.x, painting.position.y, painting.position.z);
@@ -75,7 +75,6 @@ paintingData.forEach((painting) => {
         undefined,
         (error) => {
             console.error("Error loading texture:", painting.name, error);
-            // Fallback: Use colored plane if texture fails
             const fallbackMaterial = new THREE.MeshStandardMaterial({ 
                 color: 0x333333,
                 emissive: 0x888888
@@ -90,10 +89,21 @@ paintingData.forEach((painting) => {
         }
     );
 });
-
-// ========== FPS CONTROLS (Same as Before) ==========
+// ========== IMPROVED FPS CONTROLS ==========
 let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
 const moveSpeed = 0.2;
+const rotationSpeed = 0.002;
+
+// Create a camera group for better movement control
+const cameraGroup = new THREE.Group();
+scene.add(cameraGroup);
+cameraGroup.position.set(0, 1.6, 0); // Set initial position at eye level
+cameraGroup.add(camera);
+camera.position.set(0, 0, 0); // Reset camera position relative to group
+
+// Store rotation values
+let pitch = 0; // Vertical rotation (up/down)
+let yaw = 0;   // Horizontal rotation (left/right)
 
 document.addEventListener('keydown', (e) => {
     switch (e.key.toLowerCase()) {
@@ -115,9 +125,15 @@ document.addEventListener('keyup', (e) => {
 
 document.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement === renderer.domElement) {
-        camera.rotation.y -= e.movementX * 0.002;
-        camera.rotation.x -= e.movementY * 0.002;
-        camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+        // Update rotation angles
+        yaw -= e.movementX * rotationSpeed;
+        pitch -= e.movementY * rotationSpeed;
+        
+        // Limit vertical rotation to prevent flipping
+        pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+        
+        // Apply rotations to camera group
+        cameraGroup.rotation.set(pitch, yaw, 0, 'YXZ');
     }
 });
 
@@ -125,20 +141,50 @@ renderer.domElement.addEventListener('click', () => {
     renderer.domElement.requestPointerLock();
 });
 
-// ========== ANIMATION LOOP ==========
+// ========== SMOOTH ANIMATION LOOP ==========
 function animate() {
     requestAnimationFrame(animate);
 
-    // Movement
+    // Get forward direction from camera group's rotation
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(cameraGroup.quaternion);
+    forward.y = 0; // Keep movement horizontal
+    forward.normalize();
+
+    // Calculate right direction perpendicular to forward
+    const right = new THREE.Vector3(-forward.z, 0, forward.x);
+    
+    // Apply movement relative to camera direction
+    if (moveForward) cameraGroup.position.addScaledVector(forward, moveSpeed);
+    if (moveBackward) cameraGroup.position.addScaledVector(forward, -moveSpeed);
+    if (moveLeft) cameraGroup.position.addScaledVector(right, moveSpeed);
+    if (moveRight) cameraGroup.position.addScaledVector(right, -moveSpeed);
+
+    // Keep camera at fixed height
+    cameraGroup.position.y = 1.6;
+
+    renderer.render(scene, camera);
+}
+animate();
+
+// ========== SMOOTH ANIMATION LOOP ==========
+function animate() {
+    requestAnimationFrame(animate);
+
+    // Movement - completely smooth with no vertical variation
     const direction = new THREE.Vector3();
     camera.getWorldDirection(direction);
-    direction.y = 0;
+    direction.y = 0; // Keep movement horizontal
     direction.normalize();
 
+    const sideDirection = new THREE.Vector3(-direction.z, 0, direction.x); // Perpendicular to forward
+    
     if (moveForward) camera.position.addScaledVector(direction, moveSpeed);
     if (moveBackward) camera.position.addScaledVector(direction, -moveSpeed);
-    if (moveLeft) camera.position.addScaledVector(new THREE.Vector3(-direction.z, 0, direction.x), moveSpeed);
-    if (moveRight) camera.position.addScaledVector(new THREE.Vector3(direction.z, 0, -direction.x), moveSpeed);
+    if (moveLeft) camera.position.addScaledVector(sideDirection, moveSpeed);
+    if (moveRight) camera.position.addScaledVector(sideDirection, -moveSpeed);
+
+    // Keep camera at fixed height
+    camera.position.y = 1.6;
 
     renderer.render(scene, camera);
 }

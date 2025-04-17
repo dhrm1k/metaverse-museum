@@ -49,8 +49,6 @@ Whether you're from a big city or a small town, we want you to experience art—
 
 - `Three.js` for the 3D world
 - Basic web stuff like `HTML`, `CSS`, `JavaScript`
-- A little `Blender` for 3D modeling
-- And lots of late-night teamwork and coffee ☕️
 
 ---
 
@@ -70,7 +68,7 @@ Whether you're from a big city or a small town, we want you to experience art—
 
 - Rathor Sarthak  
 - Jigar Kushwaha  
-- Parmar Dharmik  
+- Dharmik Parmar  
 - Dhanashree Trambadiya
 
 ---

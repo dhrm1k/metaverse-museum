@@ -101,7 +101,7 @@ const PAINTINGS = [
         height: 8,
         position: { x: 0, y: 8, z: -49.3 },
         rotation: 0,
-        title: "falling bird"
+        title: "Falling bird"
     },
     {
         url: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg/1280px-Michelangelo_-_Creation_of_Adam_%28cropped%29.jpg",
@@ -109,7 +109,7 @@ const PAINTINGS = [
         height: 8,
         position: { x: 25, y: 8, z: -49.3 },
         rotation: 0,
-        title: "Creation of Adam"
+        title: "The Creation of Adam"
     },
 
     // South Wall (Back wall) paintings
@@ -122,12 +122,12 @@ const PAINTINGS = [
         title: "Van Gogh Self Portrait"
     },
     {
-        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Claude_Monet_-_Water_Lilies_-_Google_Art_Project.jpg/1280px-Claude_Monet_-_Water_Lilies_-_Google_Art_Project.jpg",
-        width: 12,
-        height: 8,
+        url: "https://th.bing.com/th/id/OIP.JSP9UhEpZwtqZDjriCBGigHaJP?rs=1&pid=ImgDetMain",
+        width: 7,
+        height: 9,
         position: { x: -35, y: 8, z: 49.3 },
         rotation: Math.PI,
-        title: "Water Lilies"
+        title: "Figure on Rickshaw"
     },
     {
         url: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Meisje_met_de_parel.jpg/800px-Meisje_met_de_parel.jpg",
@@ -135,7 +135,7 @@ const PAINTINGS = [
         height: 9,
         position: { x: -10, y: 8, z: 49.3 },
         rotation: Math.PI,
-        title: "Girl with Pearl Earring"
+        title: "Girl with a Pearl Earring"
     },
 
     // East Wall (Right wall) paintings
@@ -180,6 +180,14 @@ const PAINTINGS = [
         position: { x: -10, y: 8, z: 49.3 },
         rotation: Math.PI,
         title: "Meditation"
+    },
+    {
+        url: "https://dza2a2ql7zktf.cloudfront.net/binaries-cdn/dqzqcuqf9/image/fetch/q_auto,w_500/https://d2u3kfwd92fzu7.cloudfront.net/catalog/artwork/gallery/1380/Departure_2_DSC8608_copy-2.jpg",
+        width: 8,
+        height: 10,
+        position: { x: -60, y: 8, z: 49.3 },
+        rotation: Math.PI,
+        title: "Van Gogh Self Portrait"
     }
 ];
 
@@ -278,7 +286,7 @@ const PAINTING_DETAILS = {
         technique: "Oil, tempera, and pastel on cardboard",
         location: "National Gallery, Oslo"
     },
-    "falling bird": {
+    "Falling bird": {
         artist: "Tyeb Mehta",
         year: "1988",
         description: "A masterpiece by one of India's most significant modern artists, Tyeb Mehta. The painting depicts his iconic 'falling figure' motif, rendered in his distinctive style of flat colors and sharp lines. The work represents both movement and tension, characteristic of Mehta's exploration of human condition and violence.",
@@ -294,12 +302,14 @@ const PAINTING_DETAILS = {
         technique: "Fresco",
         location: "Sistine Chapel, Vatican City"
     },
-    "Water Lilies": {
-        artist: "Claude Monet",
-        year: "1919",
-        description: "Part of Monet's Water Lilies series, this painting captures the artist's flower garden at Giverny. The series represents Monet's exploration of light, reflection, and natural beauty.",
+    "Figure on Rickshaw": {
+        artist: "Tyeb Mehta",
+        year: "1984",
+        description: "This powerful painting is part of Tyeb Mehta's iconic Rickshaw Puller series, depicting a figure merged with a rickshaw in his distinctive minimalist style. The work captures the struggle and dignity of urban labor, showing a human figure geometrically fragmented and integrated with the rickshaw, symbolizing the dehumanizing aspects of poverty and labor. The stark color planes and diagonal compositions create a sense of tension and movement, while the distorted human form reflects the physical and emotional burden of the rickshaw puller's existence. This painting represents Mehta's recurring theme of human suffering and resilience in modern India.",
         technique: "Oil on canvas",
-        location: "Musée de l'Orangerie, Paris"
+        location: "Private Collection",
+        style: "Modern Indian Art, Minimalist Expressionism",
+        significance: "Part of Mehta's significant Rickshaw series that emerged from his experiences in Kolkata, representing his artistic response to urban poverty and human condition"
     },
     "The Last Supper": {
         artist: "Leonardo da Vinci",
@@ -336,6 +346,37 @@ const PAINTING_DETAILS = {
         technique: "Acrylic on Canvas",
         location: "Indian Art Zone Gallery",
         size: "30 x 30 inches"
+    },
+    "Departure 2": {
+        artist: "Krishen Khanna",
+        year: "2008",
+        description: "A striking composition from Khanna's iconic 'Departure' series, this painting captures the essence of human migration and movement. The artwork depicts figures in transit, rendered in bold, gestural brushstrokes that create a sense of urgency and motion. The composition uses a dramatic interplay of light and shadow to convey the emotional weight of departure.",
+        technique: "Oil on canvas",
+        location: "DAG Modern Art Gallery",
+        significance: "Part of Krishen Khanna's seminal 'Departure' series, this work reflects on themes of exodus, displacement, and human journeys. The painting is particularly significant in the context of post-partition Indian art, drawing from Khanna's personal experiences and observations.",
+        style: "Contemporary Indian Modernism",
+        dimensions: "Large format",
+        colorPalette: "Rich earth tones with dramatic contrasts between light and dark",
+        historicalContext: "Created during a period when Khanna was deeply engaged with themes of human displacement and migration, drawing parallels between historical events and contemporary social movements."
+    },
+    "Girl with a Pearl Earring": {
+        artist: "Johannes Vermeer",
+        year: "1665",
+        description: "Often called the 'Mona Lisa of the North', this masterpiece depicts a young woman in exotic dress, looking over her shoulder with an enigmatic expression. The painting is renowned for its intimate portrayal and the luminous quality of light, particularly in the girl's gaze and the lustrous pearl earring. The subject's identity remains unknown, adding to the painting's mystery. The exotic turban and the dramatic use of light against a dark background creates a timeless and mesmerizing effect that has captivated viewers for centuries.",
+        technique: "Oil on canvas",
+        location: "Mauritshuis, The Hague, Netherlands",
+        style: "Dutch Golden Age, Baroque",
+        dimensions: "44.5 cm × 39 cm"
+    },
+    "Departure": {
+        artist: "Krishen Khanna",
+        year: "2008",
+        description: "Departure is a powerful composition that captures the essence of human movement and transition. The painting depicts a group of figures in motion, rendered in Khanna's distinctive style that combines gestural brushwork with emotional depth. The work shows people in various states of movement, their forms intertwined and overlapping, creating a sense of collective journey. The muted color palette, dominated by earthy tones and dramatic contrasts, adds to the painting's emotional resonance. This piece reflects Khanna's recurring theme of human displacement and migration, drawing from his personal experiences of Partition and his observations of urban life in India.",
+        technique: "Oil on canvas",
+        location: "DAG Modern Art Gallery",
+        style: "Contemporary Indian Art, Modernism",
+        significance: "The painting is part of Khanna's broader exploration of human movement and displacement in modern India. It represents his mature style where figurative elements merge with abstract expressionist techniques.",
+        additionalInfo: "Krishen Khanna, born in 1925, is one of India's most significant modernist painters. His work often deals with themes of migration, daily life, and human relationships, influenced by his experiences during the Partition of India and his observations of urban life."
     }
 };
 
@@ -1233,7 +1274,7 @@ function updateProximityIndicator(painting) {
                 color: white; padding: 15px; border-radius: 10px; font-family: Arial;
                 border: 1px solid #ffd700;">
                 <div style="font-size: 18px; margin-bottom: 5px;">${painting.title}</div>
-                <div style="font-size: 14px; color: #ffd700;">Press SPACE to view details</div>
+                <div style="font-size: 14px; color: #ffd700; width: 200px;">Press SPACE to view details</div>
             </div>`;
         
         if (!indicator) {
